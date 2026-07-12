@@ -13,7 +13,7 @@
     const approved=confirm('This will download the Gemma 4 E2B QAT model from Hugging Face and allocate substantial GPU memory. Nothing has been downloaded yet. Continue?');
     if(!approved)return;
     enable.disabled=true;enable.textContent='Loading Gemma…';progress.hidden=false;status.textContent='Starting local model worker…';
-    worker=new Worker('ai-worker.js',{type:'module'});worker.onmessage=({data})=>{
+    worker=new Worker('ai-worker.js?v=20260712-3',{type:'module'});worker.onmessage=({data})=>{
       if(data.type==='progress'){const pct=Math.max(0,Math.min(100,Math.round(data.value||0)));progress.value=pct;status.textContent=data.message||`Downloading model: ${pct}%`}
       if(data.type==='ready'){modelReady=true;progress.value=100;progress.hidden=true;enable.textContent='Gemma 4 E2B QAT enabled';status.textContent='Local model ready. Model data remains in this browser session/cache.';generate.disabled=!retrieved.length}
       if(data.type==='answer'){answer.hidden=false;answer.innerHTML=`<h3>Local answer</h3>${escapeHtml(data.text)}`;generate.disabled=false;generate.textContent='Generate cited answer locally'}
