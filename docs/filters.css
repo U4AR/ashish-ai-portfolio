@@ -1,0 +1,1 @@
+.controls{grid-template-columns:2fr repeat(5,1fr) auto}@media(max-width:900px){.controls{grid-template-columns:1fr 1fr}}@media(max-width:600px){.controls{grid-template-columns:1fr}}
