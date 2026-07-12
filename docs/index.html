@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="description" content="Searchable project index for Ashish T Vasant — applied AI, computer vision, spatial computing, robotics and product engineering.">
-  <title>Ashish T Vasant — Project Index</title><link rel="stylesheet" href="styles.css">
+  <title>Ashish T Vasant — Project Index</title><link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="repos.css">
 </head>
 <body>
 <header><div class="wrap header-row"><div><h1>Ashish T Vasant</h1><p>Applied AI Engineer · Project Index</p></div><nav><a href="mailto:ashish.t.vasant@gmail.com">Email</a><a href="https://github.com/U4AR">GitHub</a><a href="Ashish_T_Vasant_Resume_Sarvam_Forward_Deployed_Engineer.pdf">Resume</a></nav></div></header>
@@ -20,6 +20,11 @@
   <div class="status"><strong id="count">0</strong> projects shown <span id="activeFilters"></span></div>
   <section id="projects" class="projects" aria-live="polite"></section>
   <div id="empty" class="empty" hidden><h3>No matching projects</h3><p>Try a broader search or clear one of the filters.</p></div>
+  <section class="repo-section" id="repositories">
+    <div class="section-title"><div><h2>All GitHub repositories</h2><p>Every public repository across my four GitHub accounts, including forks and early experiments.</p></div><strong><span id="repoCount">0</span> repositories</strong></div>
+    <div class="repo-controls"><label class="search"><span>Search repositories</span><input id="repoSearch" type="search" placeholder="Repository, language, account…" autocomplete="off"></label><label><span>Account</span><select id="repoAccount"><option>All accounts</option></select></label></div>
+    <div id="repos" class="repos" aria-live="polite"></div>
+  </section>
 </main>
 <footer><div class="wrap">Ashish T Vasant · Kottayam, Kerala · <a href="mailto:ashish.t.vasant@gmail.com">ashish.t.vasant@gmail.com</a></div></footer>
 <script src="script.js"></script>
