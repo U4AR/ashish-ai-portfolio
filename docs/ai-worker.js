@@ -1,17 +1,35 @@
-import { env, pipeline } from 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.2.0';
+import {
+  AutoProcessor,
+  Gemma4ForConditionalGeneration,
+  env,
+  pipeline,
+} from 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.2.0';
 
 env.allowLocalModels = false;
 
-const MODEL = 'onnx-community/gemma-3-1b-it-ONNX';
-let generator = null;
+const MODELS = {
+  small: {
+    id: 'onnx-community/gemma-3-1b-it-ONNX',
+    label: 'Gemma 3 1B q4f16',
+    kind: 'text-generation',
+  },
+  large: {
+    id: 'onnx-community/gemma-4-E2B-it-ONNX',
+    label: 'Gemma 4 E2B q4f16',
+    kind: 'gemma4',
+  },
+};
+
+let runGeneration = null;
 
 self.onmessage = async ({ data }) => {
   try {
     if (data.type === 'init') {
+      const selected = MODELS[data.model] || MODELS.small;
       self.postMessage({
         type: 'progress',
         value: 1,
-        message: 'Loading Gemma 3 1B and preparing WebGPU…',
+        message: `Loading ${selected.label} and preparing WebGPU…`,
       });
 
       const progress_callback = (update) => {
@@ -23,24 +41,56 @@ self.onmessage = async ({ data }) => {
           value: pct,
           message: downloading
             ? `Downloading ${update.file || 'model data'}: ${Math.round(pct)}%`
-            : `Preparing ${update.file || 'Gemma 3 1B q4f16'}…`,
+            : `Preparing ${update.file || selected.label}…`,
         });
       };
 
-      generator = await pipeline('text-generation', MODEL, {
-        device: 'webgpu',
-        dtype: 'q4f16',
-        progress_callback,
-      });
+      if (selected.kind === 'text-generation') {
+        const generator = await pipeline('text-generation', selected.id, {
+          device: 'webgpu',
+          dtype: 'q4f16',
+          progress_callback,
+        });
+        runGeneration = async (messages) => extractText(await generator(messages, {
+          max_new_tokens: 280,
+          do_sample: false,
+          return_full_text: false,
+        }));
+      } else {
+        const processor = await AutoProcessor.from_pretrained(selected.id, { progress_callback });
+        const model = await Gemma4ForConditionalGeneration.from_pretrained(selected.id, {
+          device: 'webgpu',
+          dtype: 'q4f16',
+          progress_callback,
+        });
+        runGeneration = async (messages) => {
+          const multimodalMessages = messages.map((message) => ({
+            role: message.role,
+            content: [{ type: 'text', text: message.content }],
+          }));
+          const prompt = processor.apply_chat_template(multimodalMessages, {
+            enable_thinking: false,
+            add_generation_prompt: true,
+          });
+          const inputs = await processor(prompt, null, null, { add_special_tokens: false });
+          const outputs = await model.generate({
+            ...inputs,
+            max_new_tokens: 280,
+            do_sample: false,
+          });
+          return String(processor.batch_decode(
+            outputs.slice(null, [inputs.input_ids.dims.at(-1), null]),
+            { skip_special_tokens: true },
+          )[0] || 'No answer was generated.').trim();
+        };
+      }
 
-      self.postMessage({ type: 'ready' });
+      self.postMessage({ type: 'ready', label: selected.label });
       return;
     }
 
     if (data.type === 'generate') {
-      if (!generator) {
-        throw new Error('The local model has not been loaded yet.');
-      }
+      if (!runGeneration) throw new Error('The local model has not been loaded yet.');
 
       const context = data.projects.map((project) => (
         `[${project.citation}] ${project.title} (${project.year}; ${project.context}; ${project.category})\n`
@@ -48,21 +98,12 @@ self.onmessage = async ({ data }) => {
         + `Technologies: ${project.tags.join(', ')}\n`
         + `Source: ${project.url || 'portfolio record'}`
       )).join('\n\n');
-
       const messages = [{
         role: 'user',
         content: `Answer questions about Ashish T Vasant only from the supplied project evidence. Be concise and factual. Cite every factual claim using bracketed project numbers such as [1]. If evidence is insufficient, say so. Do not invent employers, outcomes, metrics, links, or technologies.\n\nQuestion: ${data.question}\n\nRetrieved project evidence:\n${context}\n\nWrite a direct answer with citations, then a short Recommended projects list.`,
       }];
-      const result = await generator(messages, {
-        max_new_tokens: 280,
-        do_sample: false,
-        return_full_text: false,
-      });
 
-      self.postMessage({
-        type: 'answer',
-        text: extractText(result),
-      });
+      self.postMessage({ type: 'answer', text: await runGeneration(messages) });
     }
   } catch (error) {
     self.postMessage({ type: 'error', message: error?.message || String(error) });
