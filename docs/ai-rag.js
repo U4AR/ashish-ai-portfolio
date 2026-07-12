@@ -10,15 +10,15 @@
   enable.addEventListener('click',()=>{
     if(worker||modelReady)return;
     if(!('gpu' in navigator)){status.textContent='WebGPU is unavailable in this browser. Retrieval still works without the model.';return}
-    const approved=confirm('This will download the Gemma 4 E2B q4f16 model from Hugging Face and allocate substantial GPU memory. Nothing has been downloaded yet. Continue?');
+    const approved=confirm('This will download about 0.8 GB for the Gemma 3 1B q4f16 model from Hugging Face and allocate GPU memory. Nothing has been downloaded yet. Continue?');
     if(!approved)return;
     enable.disabled=true;enable.textContent='Loading Gemma…';progress.hidden=false;status.textContent='Starting local model worker…';
-    worker=new Worker('ai-worker.js?v=20260712-4',{type:'module'});worker.onmessage=({data})=>{
+    worker=new Worker('ai-worker.js?v=20260712-5',{type:'module'});worker.onmessage=({data})=>{
       if(data.type==='progress'){const pct=Math.max(0,Math.min(100,Math.round(data.value||0)));progress.value=pct;status.textContent=data.message||`Downloading model: ${pct}%`}
-      if(data.type==='ready'){modelReady=true;progress.value=100;progress.hidden=true;enable.textContent='Gemma 4 E2B q4f16 enabled';status.textContent='Local model ready. Model data remains in this browser session/cache.';generate.disabled=!retrieved.length}
+      if(data.type==='ready'){modelReady=true;progress.value=100;progress.hidden=true;enable.textContent='Gemma 3 1B q4f16 enabled';status.textContent='Local model ready. Model data remains in this browser session/cache.';generate.disabled=!retrieved.length}
       if(data.type==='answer'){answer.hidden=false;answer.innerHTML=`<h3>Local answer</h3>${escapeHtml(data.text)}`;generate.disabled=false;generate.textContent='Generate cited answer locally'}
-      if(data.type==='error'){status.textContent=`Local model could not load: ${data.message}. Retrieval remains available.`;progress.hidden=true;enable.disabled=false;enable.textContent='Retry Gemma 4 E2B q4f16 download';generate.disabled=true;worker?.terminate();worker=null}
-    };worker.onerror=event=>{status.textContent=`Local model worker failed: ${event.message||'unknown error'}. Retrieval remains available.`;enable.disabled=false;enable.textContent='Retry Gemma 4 E2B q4f16 download';progress.hidden=true;worker=null};worker.postMessage({type:'init'});
+      if(data.type==='error'){status.textContent=`Local model could not load: ${data.message}. Retrieval remains available.`;progress.hidden=true;enable.disabled=false;enable.textContent='Retry Gemma 3 1B q4f16 download';generate.disabled=true;worker?.terminate();worker=null}
+    };worker.onerror=event=>{status.textContent=`Local model worker failed: ${event.message||'unknown error'}. Retrieval remains available.`;enable.disabled=false;enable.textContent='Retry Gemma 3 1B q4f16 download';progress.hidden=true;worker=null};worker.postMessage({type:'init'});
   });
   generate.addEventListener('click',()=>{if(!modelReady||!retrieved.length)return;generate.disabled=true;generate.textContent='Generating locally…';answer.hidden=false;answer.innerHTML='<h3>Local answer</h3>Generating from the retrieved project evidence…';worker.postMessage({type:'generate',question:query.value.trim(),projects:retrieved.map((p,i)=>({citation:i+1,title:p.title,description:p.description,year:p.year,context:p.context,category:p.category,tags:p.tags,url:p.url}))})});
   function escapeHtml(text){const div=document.createElement('div');div.textContent=text;return div.innerHTML.replace(/\n/g,'<br>')}

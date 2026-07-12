@@ -10,9 +10,9 @@
 <main class="wrap">
   <section class="intro"><h2>Projects</h2><p>A searchable record of professional and independent work across AI systems, computer vision, AR/VR, robotics, digital twins and product development.</p></section>
   <section class="ai-panel" aria-labelledby="askHeading">
-    <div class="ai-heading"><div><h2 id="askHeading">Ask about my work</h2><p>Retrieve relevant projects with no model download. Optionally enable Gemma 4 locally to turn the evidence into a cited answer.</p></div><span class="local-label">Runs locally</span></div>
+    <div class="ai-heading"><div><h2 id="askHeading">Ask about my work</h2><p>Retrieve relevant projects with no model download. Optionally enable a small Gemma model locally to turn the evidence into a cited answer.</p></div><span class="local-label">Runs locally</span></div>
     <form id="ragForm" class="rag-form"><label><span>Your question</span><input id="ragQuery" type="search" placeholder="Which projects show experience with local AI and deployment?" required></label><button type="submit">Find relevant projects</button></form>
-    <div class="model-opt-in"><div><strong>Optional local answer generation</strong><p>No AI library, model weights, GPU memory, or model worker is loaded by default. Gemma downloads only after you explicitly enable it.</p></div><button id="enableAI" type="button">Download and enable Gemma 4 E2B q4f16</button></div>
+    <div class="model-opt-in"><div><strong>Optional local answer generation</strong><p>No AI library, model weights, GPU memory, or model worker is loaded by default. The approximately 0.8 GB Gemma model downloads only after you explicitly enable it.</p></div><button id="enableAI" type="button">Download and enable Gemma 3 1B q4f16 (~0.8 GB)</button></div>
     <div id="modelStatus" class="model-status" role="status">Local model: not loaded</div><progress id="modelProgress" max="100" value="0" hidden></progress>
     <div id="ragOutput" class="rag-output" hidden><div id="ragAnswer" class="rag-answer" hidden></div><div class="evidence-heading"><h3>Retrieved evidence</h3><button id="generateAnswer" type="button" disabled>Generate cited answer locally</button></div><div id="ragEvidence" class="rag-evidence"></div></div>
   </section>
@@ -36,5 +36,5 @@
   </section>
 </main>
 <footer><div class="wrap">Ashish T Vasant · Kottayam, Kerala · <a href="mailto:ashish.t.vasant@gmail.com">ashish.t.vasant@gmail.com</a></div></footer>
-<script src="script.js"></script><script src="ai-rag.js?v=20260712-4"></script>
+<script src="script.js"></script><script src="ai-rag.js?v=20260712-5"></script>
 </body></html>
