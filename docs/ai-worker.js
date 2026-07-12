@@ -6,7 +6,7 @@ import {
 
 env.allowLocalModels = false;
 
-const MODEL = 'onnx-community/gemma-4-E2B-it-qat-mobile-ONNX';
+const MODEL = 'onnx-community/gemma-4-E2B-it-ONNX';
 let processor = null;
 let model = null;
 
@@ -28,13 +28,14 @@ self.onmessage = async ({ data }) => {
           value: pct,
           message: downloading
             ? `Downloading ${update.file || 'model data'}: ${Math.round(pct)}%`
-            : `Preparing ${update.file || 'Gemma 4 E2B QAT'}…`,
+            : `Preparing ${update.file || 'Gemma 4 E2B q4f16'}…`,
         });
       };
 
       processor = await AutoProcessor.from_pretrained(MODEL, { progress_callback });
       model = await Gemma4ForConditionalGeneration.from_pretrained(MODEL, {
         device: 'webgpu',
+        dtype: 'q4f16',
         progress_callback,
       });
 
