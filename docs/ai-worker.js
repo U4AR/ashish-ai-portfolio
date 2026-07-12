@@ -112,10 +112,13 @@ self.onmessage = async ({ data }) => {
       )).join('\n\n');
       const messages = [{
         role: 'user',
-        content: `Answer questions about Ashish T Vasant only from the supplied project evidence. Be concise and factual. Cite every factual claim using bracketed project numbers such as [1]. If evidence is insufficient, say so. Do not invent employers, outcomes, metrics, links, or technologies.\n\nQuestion: ${data.question}\n\nRetrieved project evidence:\n${context}\n\nWrite a direct answer with citations, then a short Recommended projects list.`,
+        content: `Answer questions about Ashish T Vasant only from the supplied project evidence. Be concise and factual. Every project bullet must include its bracketed evidence number, for example [1]. If evidence is insufficient, say so. Do not invent employers, outcomes, metrics, links, or technologies.\n\nQuestion: ${data.question}\n\nRetrieved project evidence:\n${context}\n\nWrite a direct answer with citations, then a short Recommended projects list.`,
       }];
 
-      self.postMessage({ type: 'answer', text: await runGeneration(messages) });
+      self.postMessage({
+        type: 'answer',
+        text: ensureProjectCitations(await runGeneration(messages), data.projects),
+      });
     }
   } catch (error) {
     self.postMessage({ type: 'error', message: error?.message || String(error) });
@@ -131,4 +134,15 @@ function extractText(result) {
   if (Array.isArray(value)) value = value.map((item) => item?.text ?? String(item)).join('');
   if (typeof value === 'object') value = value?.text ?? value?.content ?? JSON.stringify(value);
   return String(value || 'No answer was generated.').trim();
+}
+
+function ensureProjectCitations(text, projects) {
+  let cited = text;
+  for (const project of projects) {
+    const marker = `[${project.citation}]`;
+    if (cited.includes(marker)) continue;
+    const escapedTitle = project.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    cited = cited.replace(new RegExp(escapedTitle, 'i'), (title) => `${title} ${marker}`);
+  }
+  return cited;
 }

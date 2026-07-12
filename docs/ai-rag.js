@@ -79,7 +79,7 @@
     progress.hidden = false;
     status.textContent = 'Starting resumable model download…';
 
-    modelWorker = new Worker('ai-worker.js?v=20260712-8', { type: 'module' });
+    modelWorker = new Worker('ai-worker.js?v=20260712-9', { type: 'module' });
     modelWorker.onmessage = ({ data }) => {
       if (data.type === 'progress') {
         const pct = Math.max(0, Math.min(100, Math.round(data.value || 0)));
