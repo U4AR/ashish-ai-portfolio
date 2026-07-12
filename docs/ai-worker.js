@@ -4,8 +4,18 @@ import {
   env,
   pipeline,
 } from 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.2.0';
+import { clearResumableChunks, installResumableFetch } from './resumable-fetch.js?v=20260712-2';
 
 env.allowLocalModels = false;
+installResumableFetch(env, (update) => {
+  const pct = Math.round(update.progress || 0);
+  const resumed = Math.round(update.resumedFrom || 0);
+  self.postMessage({
+    type: 'progress',
+    value: pct,
+    message: `${resumed ? `Resumed from ${resumed}%; saving new chunks` : 'Saving resumable chunks'}: ${update.file} — ${pct}%`,
+  });
+});
 
 const MODELS = {
   small: {
@@ -85,6 +95,8 @@ self.onmessage = async ({ data }) => {
         };
       }
 
+      self.postMessage({ type: 'progress', value: 100, message: 'Finalizing the persistent model cache…' });
+      await clearResumableChunks(selected.id);
       self.postMessage({ type: 'ready', label: selected.label });
       return;
     }

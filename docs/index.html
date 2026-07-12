@@ -10,12 +10,18 @@
 <main class="wrap">
   <section class="intro"><h2>Projects</h2><p>A searchable record of professional and independent work across AI systems, computer vision, AR/VR, robotics, digital twins and product development.</p></section>
   <section class="ai-panel" aria-labelledby="askHeading">
-    <div class="ai-heading"><div><h2 id="askHeading">Ask about my work</h2><p>Retrieve relevant projects with no model download. Optionally enable a small Gemma model locally to turn the evidence into a cited answer.</p></div><span class="local-label">Runs locally</span></div>
+    <div class="ai-heading"><div><h2 id="askHeading">Semantic project search</h2><p>Find relevant work using local embeddings. The first search loads a small 23 MB search model; no generative model is needed.</p></div><span class="local-label">Runs locally</span></div>
     <form id="ragForm" class="rag-form"><label><span>Your question</span><input id="ragQuery" type="search" placeholder="Which projects show experience with local AI and deployment?" required></label><button type="submit">Find relevant projects</button></form>
-    <div class="model-opt-in"><div><strong>Optional local answer generation</strong><p>No AI library, model weights, GPU memory, or model worker is loaded by default. Choose a model, then explicitly enable it.</p></div><label class="model-choice"><span>Local model</span><select id="localModelChoice"><option value="small" selected>Gemma 3 1B q4f16 — ~0.8 GB (default)</option><option value="large">Gemma 4 E2B q4f16 — ~3.38 GB</option></select></label><button id="enableAI" type="button">Download and enable selected model</button></div>
-    <div id="modelStatus" class="model-status" role="status">Local model: not loaded</div><progress id="modelProgress" max="100" value="0" hidden></progress>
-    <div id="ragOutput" class="rag-output" hidden><div id="ragAnswer" class="rag-answer" hidden></div><div class="evidence-heading"><h3>Retrieved evidence</h3><button id="generateAnswer" type="button" disabled>Generate cited answer locally</button></div><div id="ragEvidence" class="rag-evidence"></div></div>
+    <div id="semanticStatus" class="model-status" role="status">Semantic search model: loads on first search</div>
+    <div id="ragOutput" class="rag-output" hidden><div class="evidence-heading"><h3>Retrieved evidence</h3><button id="openAnswerDialog" type="button" disabled>Open local answer generator</button></div><div id="ragEvidence" class="rag-evidence"></div></div>
   </section>
+  <dialog id="answerDialog" class="answer-dialog" aria-labelledby="answerDialogTitle">
+    <div class="dialog-header"><div><h2 id="answerDialogTitle">Local answer generator</h2><p>Turn the retrieved project evidence into a cited answer. Model download and generation stay on this device.</p></div><button id="closeAnswerDialog" type="button" aria-label="Close local answer generator">Close</button></div>
+    <div class="model-opt-in"><div><strong>Choose a local model</strong><p>Downloads use resumable 8 MB chunks. If the connection drops, retry continues from saved chunks.</p></div><label class="model-choice"><span>Local model</span><select id="localModelChoice"><option value="small" selected>Gemma 3 1B q4f16 — ~0.8 GB (default)</option><option value="large">Gemma 4 E2B q4f16 — ~3.38 GB</option></select></label><button id="enableAI" type="button">Download and enable selected model</button></div>
+    <div id="modelStatus" class="model-status" role="status">Local answer model: not loaded</div><progress id="modelProgress" max="100" value="0" hidden></progress>
+    <div class="dialog-actions"><button id="generateAnswer" type="button" disabled>Generate cited answer locally</button></div>
+    <div id="ragAnswer" class="rag-answer" hidden></div>
+  </dialog>
   <section class="featured-section"><div class="section-title"><div><h2>Featured projects</h2><p>Most significant and complete work, selected for technical depth, scope and demonstrated outcomes.</p></div></div><div id="featured" class="featured"></div></section>
   <section class="controls" aria-label="Project search and filters">
     <label class="search"><span>Search projects</span><input id="search" type="search" placeholder="Try: RAG, Flutter, drone, local AI…" autocomplete="off"></label>
@@ -36,5 +42,5 @@
   </section>
 </main>
 <footer><div class="wrap">Ashish T Vasant · Kottayam, Kerala · <a href="mailto:ashish.t.vasant@gmail.com">ashish.t.vasant@gmail.com</a></div></footer>
-<script src="script.js"></script><script src="ai-rag.js?v=20260712-6"></script>
+<script src="script.js"></script><script src="ai-rag.js?v=20260712-8"></script>
 </body></html>
