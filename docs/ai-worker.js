@@ -171,7 +171,7 @@ Write only the concise cited answer.`,
 
       self.postMessage({ type: 'answer_start', requestId: data.requestId });
       const generated = await runGeneration(messages, {
-        maxNewTokens: data.lowMemory ? 150 : 180,
+        maxNewTokens: data.lowMemory ? 140 : 160,
         stream: true,
         requestId: data.requestId,
       });
@@ -210,9 +210,14 @@ function ensureProjectCitations(text, projects) {
 
 function finalizeAnswer(text, projects) {
   const cited = ensureProjectCitations(text, projects);
-  const hasValidCitation = projects.some((project) => cited.includes(`[${project.citation}]`));
-  const soundsGeneric = /here(?:'s| is) (?:a )?(?:concise )?summary|strong background|extensive experience|proven track record|various domains/i.test(cited);
-  if (!hasValidCitation || soundsGeneric) return buildEvidenceAnswer(projects);
+  const validCitations = projects.filter((project) => cited.includes(`[${project.citation}]`));
+  const wordCount = cited.trim().split(/\s+/).filter(Boolean).length;
+  const soundsGeneric = /here(?:'s| is) (?:a )?(?:concise )?summary|based on the (?:provided|supplied) evidence|strong background|extensive experience|proven track record|various domains/i.test(cited);
+  const repeatsResults = /relevant projects|matching projects/i.test(cited);
+  const unfinished = cited.length > 0 && !/[.!?\])}]$/.test(cited.trim());
+  if (!validCitations.length || validCitations.length > 3 || wordCount > 110 || soundsGeneric || repeatsResults || unfinished) {
+    return buildEvidenceAnswer(projects);
+  }
   return cited;
 }
 
