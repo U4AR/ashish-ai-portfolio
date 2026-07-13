@@ -41,7 +41,7 @@
   let pageSearchRequestId = 0;
   let chatSearchRequestId = 0;
   let chatRequestId = 0;
-  const CHAT_SEARCH_CACHE_KEY = 'ashish-portfolio-chat-search-v2';
+  const CHAT_SEARCH_CACHE_KEY = 'ashish-portfolio-chat-search-v3';
   const ONE_DAY_MS = 24 * 60 * 60 * 1000;
   const lowMemoryMode = matchMedia('(max-width: 760px)').matches
     || (Number(navigator.deviceMemory || 8) <= 6);
