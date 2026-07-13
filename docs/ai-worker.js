@@ -178,7 +178,7 @@ Write only the concise cited answer.`,
       self.postMessage({
         type: 'answer',
         requestId: data.requestId,
-        text: finalizeAnswer(generated, data.projects),
+        text: finalizeAnswer(generated, data.projects, data.question),
       });
     }
   } catch (error) {
@@ -208,7 +208,7 @@ function ensureProjectCitations(text, projects) {
   return cited;
 }
 
-function finalizeAnswer(text, projects) {
+function finalizeAnswer(text, projects, question) {
   const cited = ensureProjectCitations(text, projects);
   const validCitations = projects.filter((project) => cited.includes(`[${project.citation}]`));
   const wordCount = cited.trim().split(/\s+/).filter(Boolean).length;
@@ -216,15 +216,20 @@ function finalizeAnswer(text, projects) {
   const repeatsResults = /relevant projects|matching projects/i.test(cited);
   const unfinished = cited.length > 0 && !/[.!?\])}]$/.test(cited.trim());
   if (!validCitations.length || validCitations.length > 3 || wordCount > 110 || soundsGeneric || repeatsResults || unfinished) {
-    return buildEvidenceAnswer(projects);
+    return buildEvidenceAnswer(projects, question);
   }
   return cited;
 }
 
-function buildEvidenceAnswer(projects) {
+function buildEvidenceAnswer(projects, question = '') {
   if (!projects.length) return 'The portfolio does not contain enough evidence to answer that question.';
   const specific = projects.filter((project) => !/resume|career profile/i.test(project.title));
   const selected = (specific.length ? specific : projects).slice(0, 3);
+  if (/\b(compare|comparison|difference|versus|vs\.?)\b/i.test(question) && selected.length >= 2) {
+    return selected.slice(0, 2).map((project) => (
+      `- **${project.title}:** ${project.description} [${project.citation}]`
+    )).join('\n');
+  }
   return [
     'The strongest matching evidence is:',
     '',

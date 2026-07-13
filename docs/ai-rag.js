@@ -49,7 +49,7 @@
   const stop = new Set([
     'the', 'a', 'an', 'and', 'or', 'for', 'of', 'to', 'in', 'on', 'with', 'what',
     'which', 'show', 'find', 'project', 'projects', 'work', 'ashish', 'experience',
-    'has', 'have', 'built', 'did', 'about', 'vasant', 'who', 'is', 'does',
+    'has', 'have', 'built', 'did', 'about', 'vasant', 'who', 'is', 'does', 'compare',
   ]);
   const expansions = {
     ai: ['llm', 'model', 'agent', 'vision', 'rag'],
@@ -173,7 +173,7 @@
     setStage(cached ? 'Opening saved AI…' : 'Preparing AI answers…');
     addLog(cached ? 'Saved AI model found.' : 'AI setup started.');
 
-    modelWorker = new Worker('ai-worker.js?v=20260713-4', { type: 'module' });
+    modelWorker = new Worker('ai-worker.js?v=20260713-5', { type: 'module' });
     modelWorker.onmessage = handleModelMessage;
     modelWorker.onerror = () => handleModelFailure();
     modelWorker.postMessage({ type: 'init', model: selected });
@@ -437,15 +437,19 @@
         description: `${project.description} ${project.details || ''}`.toLowerCase(),
       };
       let matchScore = 0;
+      let matchedTerms = 0;
+      let strongMatch = false;
       for (const term of terms) {
-        if (fields.title.includes(term)) matchScore += 8;
-        if (fields.tags.includes(term)) matchScore += 5;
-        if (fields.category.includes(term)) matchScore += 4;
-        if (fields.description.includes(term)) matchScore += 2;
+        let matched = false;
+        if (fields.title.includes(term)) { matchScore += 8; matched = true; strongMatch = true; }
+        if (fields.tags.includes(term)) { matchScore += 5; matched = true; strongMatch = true; }
+        if (fields.category.includes(term)) { matchScore += 4; matched = true; }
+        if (fields.description.includes(term)) { matchScore += 2; matched = true; }
+        if (matched) matchedTerms += 1;
       }
       if (fields.title.includes(text.toLowerCase())) matchScore += 12;
-      return { ...project, matchScore, relevance: matchScore + project.significance / 100 };
-    }).filter((project) => project.matchScore > 0)
+      return { ...project, matchScore, matchedTerms, strongMatch, relevance: matchScore + project.significance / 100 };
+    }).filter((project) => project.strongMatch || project.matchedTerms >= 2)
       .sort((left, right) => right.relevance - left.relevance)
       .slice(0, 7);
   }
