@@ -234,7 +234,7 @@ function extractDirectAnswer(text, question, projects) {
     .replace(/\s+/g, ' ')
     .trim();
   const sentences = cleaned.match(/[^.!?]+[.!?]+/g) || [];
-  cleaned = sentences.slice(0, 2).join(' ').trim();
+  cleaned = sentences.slice(0, 2).join(' ').replace(/\s+/g, ' ').trim();
   const wordCount = cleaned.split(/\s+/).filter(Boolean).length;
   const vague = /based on the (?:provided|supplied) evidence|strong background|extensive experience|proven track record|various domains/i.test(cleaned);
   if (!cleaned || wordCount < 5 || wordCount > 60 || vague) {
@@ -245,7 +245,7 @@ function extractDirectAnswer(text, question, projects) {
 
 function buildQuestionLead(question, projects) {
   if (/\b(compare|comparison|difference|versus|vs\.?)\b/i.test(question) && projects.length >= 2) {
-    return `${projects[0].title} is ${lowercaseFirst(projects[0].description)} ${projects[1].title}, by contrast, is ${lowercaseFirst(projects[1].description)}`;
+    return `${projects[0].title} is ${withArticle(projects[0].description)}, while ${projects[1].title} is ${withArticle(projects[1].description)}.`;
   }
   const experience = question.match(/\bwhat\s+(.{2,60}?)\s+experience\s+(?:does|do)\b/i)?.[1]?.trim();
   const titles = projects.map((project) => project.title).join(', ').replace(/, ([^,]*)$/, ' and $1');
@@ -256,6 +256,12 @@ function buildQuestionLead(question, projects) {
 function lowercaseFirst(value) {
   const text = String(value || '').trim();
   return text ? `${text.charAt(0).toLowerCase()}${text.slice(1)}` : '';
+}
+
+function withArticle(value) {
+  const text = lowercaseFirst(value).replace(/[.!?]+$/, '');
+  if (/^(?:a|an)\s/i.test(text)) return text;
+  return `${/^[aeiou]/i.test(text) ? 'an' : 'a'} ${text}`;
 }
 
 function parseToolCall(text, originalQuestion) {

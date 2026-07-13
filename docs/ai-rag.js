@@ -208,7 +208,7 @@
     setStage(cached ? 'Opening saved AI…' : 'Preparing AI answers…');
     addLog(cached ? 'Saved AI model found.' : 'AI setup started.');
 
-    modelWorker = new Worker('ai-worker.js?v=20260713-6', { type: 'module' });
+    modelWorker = new Worker('ai-worker.js?v=20260713-7', { type: 'module' });
     modelWorker.onmessage = handleModelMessage;
     modelWorker.onerror = () => handleModelFailure();
     modelWorker.postMessage({ type: 'init', model: selected });
