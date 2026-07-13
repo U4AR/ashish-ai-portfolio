@@ -40,6 +40,8 @@
   let pageSearchRequestId = 0;
   let chatSearchRequestId = 0;
   let chatRequestId = 0;
+  const CHAT_SEARCH_CACHE_KEY = 'ashish-portfolio-chat-search-v1';
+  const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
   const stop = new Set([
     'the', 'a', 'an', 'and', 'or', 'for', 'of', 'to', 'in', 'on', 'with', 'what',
@@ -187,7 +189,7 @@
       addLog(`Search tool called: ${data.tool}.`);
       addLog(`Searching for “${data.query}”…`);
       setStage(`Searching projects for “${data.query}”…`);
-      runSemanticSearch(data.query, 'chat');
+      runFastChatSearch(data.query);
     }
     if (data.type === 'answer_start' && data.requestId === chatRequestId) {
       streamedAnswer = '';
@@ -258,6 +260,19 @@
         text: `${project.title}. ${project.description}. ${project.details || ''}. ${project.broad}. ${project.category}. ${project.tags.join(', ')}. ${project.context}.`,
       })),
     });
+  }
+
+  function runFastChatSearch(text) {
+    const saved = readSavedChatSearch(text);
+    if (saved.length) {
+      addLog('Loaded matching projects from the saved local index.');
+      finishChatSearch(saved);
+      return;
+    }
+    const matches = keywordRetrieve(text);
+    saveChatSearch(text, matches);
+    addLog('Fast local project index searched.');
+    finishChatSearch(matches);
   }
 
   function ensureSearchWorker() {
@@ -373,6 +388,33 @@
     }).filter((project) => project.relevance > 1)
       .sort((left, right) => right.relevance - left.relevance)
       .slice(0, 7);
+  }
+
+  function readSavedChatSearch(text) {
+    try {
+      const saved = JSON.parse(localStorage.getItem(CHAT_SEARCH_CACHE_KEY) || '{}');
+      const key = text.trim().toLowerCase();
+      const entry = saved[key];
+      if (!entry || Date.now() - entry.savedAt > ONE_DAY_MS) return [];
+      return entry.titles.map((title) => projects.find((project) => project.title === title)).filter(Boolean);
+    } catch {
+      return [];
+    }
+  }
+
+  function saveChatSearch(text, matches) {
+    try {
+      const saved = JSON.parse(localStorage.getItem(CHAT_SEARCH_CACHE_KEY) || '{}');
+      const now = Date.now();
+      for (const [key, entry] of Object.entries(saved)) {
+        if (!entry?.savedAt || now - entry.savedAt > ONE_DAY_MS) delete saved[key];
+      }
+      saved[text.trim().toLowerCase()] = {
+        savedAt: now,
+        titles: matches.map((project) => project.title),
+      };
+      localStorage.setItem(CHAT_SEARCH_CACHE_KEY, JSON.stringify(saved));
+    } catch {}
   }
 
   function tokenize(text) {

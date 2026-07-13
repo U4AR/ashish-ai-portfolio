@@ -21,7 +21,7 @@
     <a class="github-all-link" href="#repositories">See all original repositories on this page</a>
   </dialog>
   <dialog id="answerDialog" class="answer-dialog" aria-labelledby="answerDialogTitle">
-    <div class="dialog-header"><div><h2 id="answerDialogTitle">Ask about Ashish's work <span class="info-tip" tabindex="0" aria-label="AI chat technical details" data-tip="Runs with Gemma in your browser using WebGPU. Faster is about 0.8 GB; More detailed is about 3.38 GB. Setup begins only after confirmation and can resume after interruptions.">i</span></h2><p>Ask directly. The assistant will turn your question into a project search, use the results, and answer with sources.</p></div><button id="closeAnswerDialog" type="button" aria-label="Close AI project chat">Close</button></div>
+    <div class="dialog-header"><div><h2 id="answerDialogTitle">Ask about Ashish's work <span class="info-tip" tabindex="0" aria-label="AI chat technical details" data-tip="Runs with Gemma in your browser using WebGPU. Faster is about 0.8 GB; More detailed is about 3.38 GB. Setup begins only after confirmation, can resume after interruptions, and reusable resources stay cached for at least 24 hours when browser storage permits.">i</span></h2><p>Ask directly. The assistant will turn your question into a project search, use the results, and answer with sources.</p></div><button id="closeAnswerDialog" type="button" aria-label="Close AI project chat">Close</button></div>
     <form id="chatForm" class="chat-form"><label><span>Your question</span><textarea id="chatQuery" rows="3" placeholder="What experience does Ashish have with robotics and computer vision?" required></textarea></label><button id="chatSubmit" type="submit">Send</button></form>
     <div class="model-opt-in"><div><strong>Answer mode <span class="info-tip" tabindex="0" aria-label="Answer mode technical details" data-tip="Faster uses Gemma 3 1B q4f16. More detailed uses Gemma 4 E2B q4f16. Both run locally with resumable downloads.">i</span></strong><p>The faster option is recommended for most visitors.</p></div><label class="model-choice"><span>Answer mode</span><select id="localModelChoice"><option value="small" selected>Faster (recommended)</option><option value="large">More detailed</option></select></label><button id="enableAI" type="button">Enable AI answers</button></div>
     <div id="modelStatus" class="model-status" role="status">AI answers are off until you enable them.</div><progress id="modelProgress" max="100" value="0" hidden></progress>
@@ -48,5 +48,5 @@
   </section>
 </main>
 <footer><div class="wrap">Ashish T Vasant · Kottayam, Kerala · <a href="mailto:ashish.t.vasant@gmail.com">ashish.t.vasant@gmail.com</a></div></footer>
-<script src="script.js?v=20260713-1"></script><script src="ai-rag.js?v=20260713-1"></script>
+<script src="script.js?v=20260713-1"></script><script src="ai-rag.js?v=20260713-2"></script>
 </body></html>
