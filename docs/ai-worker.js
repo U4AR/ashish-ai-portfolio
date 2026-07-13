@@ -147,12 +147,29 @@ self.onmessage = async ({ data }) => {
       )).join('\n\n');
       const messages = [{
         role: 'user',
-        content: `Answer questions about Ashish T Vasant only from the supplied evidence. Be concise and factual. Use Markdown with short headings and lists where useful. Every factual project or resume claim must include its bracketed evidence number, for example [1]. If evidence is insufficient, say so. Do not invent employers, outcomes, metrics, links, technologies or dates.\n\nQuestion: ${data.question}\n\nRetrieved evidence:\n${context}\n\nWrite a direct answer with citations, then a short "Relevant projects" list.`,
+        content: `Answer questions about Ashish T Vasant only from the supplied evidence.
+
+Rules:
+- Answer the question immediately and stay to the point.
+- Use at most 120 words; usually 2-5 sentences is enough.
+- For a simple question, use plain paragraphs with no heading.
+- Mention no more than the 3 most relevant projects unless the visitor explicitly asks for a longer or complete list.
+- Do not repeat the question, describe the search process, add a generic summary, or append a "Relevant projects" section.
+- Use a short Markdown list only when it makes the answer clearer.
+- Every factual project or resume claim must include its bracketed evidence number, for example [1].
+- If the evidence is insufficient, say so briefly. Do not invent employers, outcomes, metrics, links, technologies or dates.
+
+Question: ${data.question}
+
+Retrieved evidence:
+${context}
+
+Write only the concise cited answer.`,
       }];
 
       self.postMessage({ type: 'answer_start', requestId: data.requestId });
       const generated = await runGeneration(messages, {
-        maxNewTokens: data.lowMemory ? 220 : 300,
+        maxNewTokens: data.lowMemory ? 150 : 180,
         stream: true,
         requestId: data.requestId,
       });
