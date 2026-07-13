@@ -10,6 +10,13 @@
   const dialog = byId('answerDialog');
   const closeDialog = byId('closeAnswerDialog');
   const headerAiChat = byId('headerAiChat');
+  const openHowRag = byId('openHowRag');
+  const openLocalRag = byId('openLocalRag');
+  const chatTabAsk = byId('chatTabAsk');
+  const chatTabHow = byId('chatTabHow');
+  const chatAskPanel = byId('chatAskPanel');
+  const chatHowPanel = byId('chatHowPanel');
+  const tryLocalAiFromGuide = byId('tryLocalAiFromGuide');
   const chatForm = byId('chatForm');
   const chatQuery = byId('chatQuery');
   const chatSubmit = byId('chatSubmit');
@@ -77,15 +84,43 @@
     runSemanticSearch(text, 'page');
   });
 
-  function openChat(prefill = '') {
+  function selectChatTab(tab) {
+    const showAsk = tab === 'ask';
+    chatTabAsk.setAttribute('aria-selected', String(showAsk));
+    chatTabHow.setAttribute('aria-selected', String(!showAsk));
+    chatAskPanel.hidden = !showAsk;
+    chatHowPanel.hidden = showAsk;
+    dialog.scrollTop = 0;
+  }
+
+  function openChat(prefill = '', tab = 'ask') {
+    selectChatTab(tab);
     dialog.showModal();
     if (prefill) chatQuery.value = prefill;
-    requestAnimationFrame(() => chatQuery.focus());
+    requestAnimationFrame(() => (tab === 'ask' ? chatQuery : chatTabHow).focus());
   }
 
   openDialog.addEventListener('click', () => openChat(query.value.trim()));
   headerAiChat.addEventListener('click', () => {
     openChat();
+    if (!modelReady && !modelLoading) requestAnimationFrame(() => startModelLoad());
+  });
+  openLocalRag.addEventListener('click', () => {
+    openChat();
+    if (!modelReady && !modelLoading) requestAnimationFrame(() => startModelLoad());
+  });
+  openHowRag.addEventListener('click', () => openChat('', 'how'));
+  chatTabAsk.addEventListener('click', () => {
+    selectChatTab('ask');
+    chatQuery.focus();
+  });
+  chatTabHow.addEventListener('click', () => {
+    selectChatTab('how');
+    chatTabHow.focus();
+  });
+  tryLocalAiFromGuide.addEventListener('click', () => {
+    selectChatTab('ask');
+    chatQuery.focus();
     if (!modelReady && !modelLoading) requestAnimationFrame(() => startModelLoad());
   });
   closeDialog.addEventListener('click', () => dialog.close());
