@@ -79,6 +79,31 @@ const projects=[
 ['Vision & Control Robotics Mentoring','2017–2020','Academic','Robotics & Control','Built and mentored student projects spanning vision robotics, control systems and mechanical design.',['Robotics','Computer Vision','Mentoring'],null]
 ].map(([title,year,context,category,description,tags,url],id)=>({id,title,year,context,broad:broadFor(category),category,description,tags,url,significance:significanceFor(title),completion:completionFor(title,context,url)}));
 
+projects.unshift({
+  id:'resume-profile',
+  title:'Ashish T Vasant — Detailed Resume & Career Profile',
+  year:'2026',
+  context:'Professional Profile',
+  broad:'AI, LLMs & Agents',
+  category:'Resume & Career Profile',
+  description:'Detailed professional profile connecting Ashish’s applied AI, computer vision, spatial computing, robotics, mechanical engineering, education, patents and project history.',
+  tags:['Resume','Career Profile','Bharat Electronics Limited','Applied AI','Computer Vision','AR/VR','Robotics','Education','Patents'],
+  url:'Ashish_T_Vasant_Resume_Sarvam_Forward_Deployed_Engineer.pdf',
+  significance:99,
+  completion:'Completed / Demonstrable',
+  details:`Ashish T Vasant is an engineer based in Kottayam, Kerala, with nearly 5.5 years at Bharat Electronics Limited as a Deputy Engineer. He is positioned for Applied AI, Vision AI, Spatial Computing and Forward Deployed Engineering roles. His career progressed from core mechanical CAD, engineering analysis and offline prototyping into AR/VR, HoloLens, robotics, drones, sensor fusion, digital twins, smart-city computer vision, local-language RAG, LLM deployment and agentic applications. His strongest differentiator is end-to-end prototyping under constraints such as imperfect data, limited connectivity, unavailable APIs, noisy sensors, monochrome imagery, local deployment and constrained hardware.
+
+Core skills include Python, C# and Unity, JavaScript, Dart and Flutter, VBA, MATLAB and Simulink, Android, PyTorch, TensorFlow, OpenCV, YOLO object and keypoint detection, Vision LLMs, local and multimodal LLMs, RAG, BM25, vector retrieval, multilingual AI, Unity XR, HoloLens, ARCore, ROS, ORB-SLAM, Intel RealSense, LiDAR, AirSim, SolidWorks, Fusion 360, ANSYS, Mastercam, Docker, Linux, Google Cloud, Google ADK, Gemini Live, Hugging Face and Chrome extensions.
+
+At BEL, his work spans defence technology, AR/VR, smart-city systems, drones, robotics, computer vision, digital twins, CAD automation, LLM applications and local-language AI. Patent-applied work includes an AR spatial translation system and an AR-CAD creation and modification workflow. Representative projects include GLM-5.2 inference optimization on dual H100 GPUs, RFP item finding and verification, Indian-language agriculture RAG, Chandigarh number-plate recognition, low-light vehicle detection, spatial-display hand keypoints, datacentre and CCTV room digital twins, ORB-SLAM with ROS and RealSense, LiDAR vehicle detection, and a 6 kg payload drone.
+
+Independent work includes Voice Keyboard, LiveLingo, DoLess-Agents, AgentGigs.org, Phantom Grid, local-AI browser productivity tools, an Android proactive conversation assistant, a privacy-preserving multimodal accountability app, Malayalam translation workflows, Surface Touch Recognition and open-source cross-platform applications.
+
+Education: B.Tech in Mechanical Engineering from National Institute of Technology Calicut, 2016–2020, CGPA 8.38/10; All India Senior School Certificate in Science, 96.4%; Indian School Certificate, 93%. Earlier technical leadership includes the Robotics Interest Group at NIT Calicut, ABU Robocon 2017, Series Elastic Actuator research, MATLAB and Simscape Multibody simulation, force-control work and robotics mentoring.
+
+Certifications and coursework include the DeepLearning.AI Deep Learning Specialization, Columbia University Computer Vision Basics, IBM Flutter and Dart Mobile Apps, plus coursework in LLM pretraining and fine-tuning, RAG, ARCore, 3D modelling, attention mechanisms and AI/ML. Languages: English fluent, Malayalam native and Hindi professional proficiency.`,
+});
+
 const repositories=[
 ['U4AR','ashish-ai-portfolio','Filterable applied AI engineering portfolio','TypeScript',false],['U4AR','glm52-fast-2xh100','GLM-5.2 754B MoE inference optimization on 2×H100','Python',false],['U4AR','ktransformers','Heterogeneous LLM inference and fine-tuning framework','','Fork'],['U4AR','JohnDoe','Find JohnDoe','Python',false],['U4AR','voicekeyboard','Local voice-to-keystroke application','','Fork'],['U4AR','KeyLess','Voice typing with realtime transcription and screen context','Rust',false],['U4AR','FocusedBrowsing','Focused browsing experiment','','Fork'],['U4AR','reed_solomon','Reed Solomon implementation in pure Dart','Dart','Fork'],['U4AR','bSrc','Dart project','Dart',false],['U4AR','DartBible-Flutter','Cross-platform mobile Bible application','','Fork'],['U4AR','LiveVoiceActivityRecognition','Live voice activity recognition experiment','Python',false],['U4AR','fillsteps','Discerning water levels through sound','','Fork'],['U4AR','PlantDiseaseTrained','Plant disease recognition model','Python',false],['U4AR','ScreenAI','Vision-language model for UI and infographic understanding','','Fork'],['U4AR','LoFTR','LoFTR webcam implementation','Jupyter Notebook','Fork'],['U4AR','panorama-to-cubemap','Convert equirectangular panoramas to cube faces','','Fork'],['U4AR','trompeloeil','3D perception simulation with browser face tracking','','Fork'],['U4AR','3DfaceTrack','Face-tracking spatial display experiment','',false],
 ['voicekeyboarddev','voicekeyboard','Offline Windows voice-to-keystroke app using local Gemma','Rust',false],

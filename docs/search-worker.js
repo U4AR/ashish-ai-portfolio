@@ -12,7 +12,7 @@ self.onmessage = async ({ data }) => {
   if (data.type !== 'search') return;
   try {
     if (!extractor) {
-      self.postMessage({ type: 'status', message: 'Getting best-match search ready…' });
+      self.postMessage({ type: 'status', requestId: data.requestId, message: 'Getting best-match search ready…' });
       extractor = await pipeline('feature-extraction', MODEL, {
         device: 'wasm',
         dtype: 'q8',
@@ -20,6 +20,7 @@ self.onmessage = async ({ data }) => {
           if (update.status === 'progress' || update.status === 'progress_total') {
             self.postMessage({
               type: 'status',
+              requestId: data.requestId,
               message: `Getting best-match search ready: ${Math.round(update.progress || 0)}%`,
             });
           }
@@ -29,7 +30,7 @@ self.onmessage = async ({ data }) => {
 
     const signature = data.projects.map((project) => project.index).join(',');
     if (!projectVectors || projectSignature !== signature) {
-      self.postMessage({ type: 'status', message: 'Comparing all projects…' });
+      self.postMessage({ type: 'status', requestId: data.requestId, message: 'Comparing all projects…' });
       const output = await extractor(
         data.projects.map((project) => project.text),
         { pooling: 'mean', normalize: true },

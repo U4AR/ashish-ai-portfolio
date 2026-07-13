@@ -5,18 +5,23 @@
   const searchMode = byId('searchMode');
   const output = byId('ragOutput');
   const evidence = byId('ragEvidence');
-  const answer = byId('ragAnswer');
+  const semanticStatus = byId('semanticStatus');
   const openDialog = byId('openAnswerDialog');
   const dialog = byId('answerDialog');
   const closeDialog = byId('closeAnswerDialog');
+  const headerAiChat = byId('headerAiChat');
+  const chatForm = byId('chatForm');
+  const chatQuery = byId('chatQuery');
+  const chatSubmit = byId('chatSubmit');
+  const chatProgress = byId('chatProgress');
+  const chatStage = byId('chatStage');
+  const chatLog = byId('chatLog');
+  const chatToolResults = byId('chatToolResults');
+  const answer = byId('ragAnswer');
   const enable = byId('enableAI');
   const choice = byId('localModelChoice');
-  const generate = byId('generateAnswer');
   const status = byId('modelStatus');
-  const semanticStatus = byId('semanticStatus');
   const progress = byId('modelProgress');
-  const headerAiChat = byId('headerAiChat');
-  const chatSearchHint = byId('chatSearchHint');
   const githubDialog = byId('githubDialog');
   const openGitHubDialog = byId('openGitHubDialog');
   const closeGitHubDialog = byId('closeGitHubDialog');
@@ -24,8 +29,17 @@
   let modelWorker = null;
   let searchWorker = null;
   let modelReady = false;
+  let modelLoading = false;
   let retrieved = [];
-  let searchRequestId = 0;
+  let chatRetrieved = [];
+  let pendingQuestion = '';
+  let currentQuestion = '';
+  let chatToolQuery = '';
+  let streamedAnswer = '';
+  let requestSequence = 0;
+  let pageSearchRequestId = 0;
+  let chatSearchRequestId = 0;
+  let chatRequestId = 0;
 
   const stop = new Set([
     'the', 'a', 'an', 'and', 'or', 'for', 'of', 'to', 'in', 'on', 'with', 'what',
@@ -41,13 +55,13 @@
     voice: ['speech', 'audio', 'gemini live', 'keyboard'],
     evaluation: ['evals', 'benchmark', 'livebench', 'terminal-bench'],
     spatial: ['ar', 'vr', 'hololens', 'digital twin', 'unity'],
+    resume: ['career', 'education', 'skills', 'bel', 'profile'],
   };
 
   form.addEventListener('submit', (event) => {
     event.preventDefault();
     const text = query.value.trim();
     if (!text) return;
-
     retrieved = searchMode.value === 'keyword' ? exactKeywordRetrieve(text) : keywordRetrieve(text);
     showEvidence();
     if (searchMode.value === 'keyword') {
@@ -55,13 +69,20 @@
       return;
     }
     semanticStatus.textContent = 'Finding the closest matches…';
-    runSemanticSearch(text);
+    runSemanticSearch(text, 'page');
   });
 
-  openDialog.addEventListener('click', () => {
-    if (retrieved.length) dialog.showModal();
+  function openChat(prefill = '') {
+    dialog.showModal();
+    if (prefill) chatQuery.value = prefill;
+    requestAnimationFrame(() => chatQuery.focus());
+  }
+
+  openDialog.addEventListener('click', () => openChat(query.value.trim()));
+  headerAiChat.addEventListener('click', () => {
+    openChat();
+    if (!modelReady && !modelLoading) requestAnimationFrame(() => startModelLoad());
   });
-  headerAiChat.addEventListener('click', () => dialog.showModal());
   closeDialog.addEventListener('click', () => dialog.close());
   dialog.addEventListener('click', (event) => {
     if (event.target === dialog) dialog.close();
@@ -71,87 +92,223 @@
   githubDialog.addEventListener('click', (event) => {
     if (event.target === githubDialog) githubDialog.close();
   });
-  byId('githubDialog').querySelector('.github-all-link').addEventListener('click', () => githubDialog.close());
+  githubDialog.querySelector('.github-all-link').addEventListener('click', () => githubDialog.close());
 
-  enable.addEventListener('click', () => {
-    if (modelWorker || modelReady) return;
+  chatForm.addEventListener('submit', (event) => {
+    event.preventDefault();
+    const text = chatQuery.value.trim();
+    if (!text) return;
+    beginChat(text);
+  });
+  enable.addEventListener('click', () => startModelLoad());
+
+  function beginChat(questionText) {
+    currentQuestion = questionText;
+    pendingQuestion = questionText;
+    chatRequestId = ++requestSequence;
+    streamedAnswer = '';
+    chatRetrieved = [];
+    answer.hidden = true;
+    answer.innerHTML = '';
+    chatLog.innerHTML = '';
+    chatToolResults.innerHTML = '';
+    chatProgress.hidden = false;
+    chatProgress.classList.remove('is-done');
+    chatSubmit.disabled = true;
+    addLog('Question received.');
+    if (modelReady) {
+      requestToolPlan(questionText);
+    } else {
+      setStage(modelLoading ? 'Waiting for AI setup…' : 'AI answers need to be enabled first…');
+      startModelLoad(questionText);
+    }
+  }
+
+  function startModelLoad(questionAfterReady = '') {
+    if (questionAfterReady) pendingQuestion = questionAfterReady;
+    if (modelReady) {
+      if (pendingQuestion) requestToolPlan(pendingQuestion);
+      return;
+    }
+    if (modelLoading) return;
     if (!('gpu' in navigator)) {
       status.textContent = 'AI answers are not supported in this browser. Project search still works.';
+      setStage('AI answers are unavailable in this browser.', true);
+      chatSubmit.disabled = false;
       return;
     }
 
     const selected = choice.value;
-    const details = selected === 'large'
-      ? { label: 'Gemma 4 E2B q4f16', size: '3.38 GB' }
-      : { label: 'Gemma 3 1B q4f16', size: '0.8 GB' };
-    const approved = confirm(
-      `AI answers need a one-time download of about ${details.size}. Continue?`,
-    );
-    if (!approved) return;
+    const size = selected === 'large' ? '3.38 GB' : '0.8 GB';
+    if (!confirm(`AI answers need a one-time download of about ${size}. Continue?`)) {
+      setStage('AI setup was not started.', true);
+      chatSubmit.disabled = false;
+      pendingQuestion = '';
+      return;
+    }
 
     navigator.storage?.persist?.().catch(() => {});
+    modelLoading = true;
     enable.disabled = true;
     choice.disabled = true;
     enable.textContent = 'Preparing AI answers…';
     progress.hidden = false;
     status.textContent = 'Preparing AI answers. You can retry if the connection is interrupted.';
+    setStage('Preparing AI answers…');
+    addLog('AI setup started.');
 
-    modelWorker = new Worker('ai-worker.js?v=20260712-9', { type: 'module' });
-    modelWorker.onmessage = ({ data }) => {
-      if (data.type === 'progress') {
-        const pct = Math.max(0, Math.min(100, Math.round(data.value || 0)));
-        progress.value = pct;
-        status.textContent = `Preparing AI answers: ${pct}%`;
+    modelWorker = new Worker('ai-worker.js?v=20260713-1', { type: 'module' });
+    modelWorker.onmessage = handleModelMessage;
+    modelWorker.onerror = () => handleModelFailure();
+    modelWorker.postMessage({ type: 'init', model: selected });
+  }
+
+  function handleModelMessage({ data }) {
+    if (data.type === 'progress') {
+      const pct = Math.max(0, Math.min(100, Math.round(data.value || 0)));
+      progress.value = pct;
+      status.textContent = `Preparing AI answers: ${pct}%`;
+      setStage(`Preparing AI answers: ${pct}%`);
+    }
+    if (data.type === 'ready') {
+      modelReady = true;
+      modelLoading = false;
+      progress.value = 100;
+      progress.hidden = true;
+      enable.textContent = 'AI answers enabled';
+      status.textContent = 'AI answers are ready to use.';
+      addLog('AI answers ready.');
+      if (pendingQuestion) requestToolPlan(pendingQuestion);
+      else setStage('Ready for a question.', true);
+    }
+    if (data.type === 'tool_call' && data.requestId === chatRequestId) {
+      chatToolQuery = data.query;
+      addLog(`Question rephrased as “${data.query}”.`);
+      addLog(`Search tool called: ${data.tool}.`);
+      addLog(`Searching for “${data.query}”…`);
+      setStage(`Searching projects for “${data.query}”…`);
+      runSemanticSearch(data.query, 'chat');
+    }
+    if (data.type === 'answer_start' && data.requestId === chatRequestId) {
+      streamedAnswer = '';
+      answer.hidden = false;
+      answer.innerHTML = '<p>Starting answer…</p>';
+      addLog('Answer generation started.');
+      setStage('Writing the answer…');
+    }
+    if (data.type === 'token' && data.requestId === chatRequestId) {
+      streamedAnswer += data.text || '';
+      answer.hidden = false;
+      answer.innerHTML = renderMarkdown(streamedAnswer);
+    }
+    if (data.type === 'answer' && data.requestId === chatRequestId) {
+      streamedAnswer = data.text || streamedAnswer;
+      answer.hidden = false;
+      answer.innerHTML = renderMarkdown(streamedAnswer);
+      addLog('Answer completed.');
+      setStage('Answer ready.', true);
+      chatSubmit.disabled = false;
+      pendingQuestion = '';
+    }
+    if (data.type === 'error') {
+      if (!modelReady) handleModelFailure();
+      else {
+        status.textContent = 'The last request stopped. You can try the question again.';
+        setStage('The request stopped before completion.', true);
+        addLog('Request stopped.');
+        chatSubmit.disabled = false;
       }
-      if (data.type === 'ready') {
-        modelReady = true;
-        progress.value = 100;
-        progress.hidden = true;
-        enable.textContent = 'AI answers enabled';
-        status.textContent = 'AI answers are ready to use.';
-        generate.disabled = !retrieved.length;
+    }
+  }
+
+  function handleModelFailure() {
+    modelReady = false;
+    modelLoading = false;
+    status.textContent = 'Setup paused. Retry to continue where it stopped.';
+    setStage('AI setup paused. Retry when ready.', true);
+    addLog('AI setup paused.');
+    enable.disabled = false;
+    choice.disabled = false;
+    enable.textContent = 'Retry AI setup';
+    progress.hidden = true;
+    chatSubmit.disabled = false;
+    modelWorker?.terminate();
+    modelWorker = null;
+  }
+
+  function requestToolPlan(questionText) {
+    pendingQuestion = '';
+    currentQuestion = questionText;
+    setStage('Understanding and rephrasing your question…');
+    addLog('Model is interpreting the question.');
+    modelWorker.postMessage({ type: 'plan', requestId: chatRequestId, question: questionText });
+  }
+
+  function runSemanticSearch(text, purpose) {
+    ensureSearchWorker();
+    const requestId = ++requestSequence;
+    if (purpose === 'chat') chatSearchRequestId = requestId;
+    else pageSearchRequestId = requestId;
+    searchWorker.postMessage({
+      type: 'search',
+      requestId,
+      query: text,
+      projects: projects.map((project, index) => ({
+        index,
+        text: `${project.title}. ${project.description}. ${project.details || ''}. ${project.broad}. ${project.category}. ${project.tags.join(', ')}. ${project.context}.`,
+      })),
+    });
+  }
+
+  function ensureSearchWorker() {
+    if (searchWorker) return;
+    searchWorker = new Worker('search-worker.js?v=20260713-3', { type: 'module' });
+    searchWorker.onmessage = ({ data }) => {
+      if (data.type === 'status') {
+        if (data.requestId === chatSearchRequestId) setStage(data.message);
+        if (data.requestId === pageSearchRequestId) semanticStatus.textContent = data.message;
       }
-      if (data.type === 'answer') {
-        answer.hidden = false;
-        answer.innerHTML = `<h3>Answer</h3>${escapeHtml(data.text)}`;
-        generate.disabled = false;
-        generate.textContent = 'Answer using matched projects';
+      if (data.type === 'results') {
+        const matches = data.scores.slice(0, 7).map(({ index, score }) => ({
+          ...projects[index],
+          relevance: Math.max(0, score * 100),
+        }));
+        if (data.requestId === chatSearchRequestId) finishChatSearch(matches);
+        if (data.requestId === pageSearchRequestId) {
+          retrieved = matches;
+          semanticStatus.textContent = 'Best matches ready.';
+          showEvidence();
+        }
       }
       if (data.type === 'error') {
-        status.textContent = 'Setup paused. Retry to continue where it stopped.';
-        progress.hidden = true;
-        enable.disabled = false;
-        choice.disabled = false;
-        enable.textContent = 'Retry AI setup';
-        generate.disabled = true;
-        modelWorker?.terminate();
-        modelWorker = null;
+        if (data.requestId === chatSearchRequestId) finishChatSearch(keywordRetrieve(chatToolQuery || currentQuestion));
+        if (data.requestId === pageSearchRequestId) {
+          semanticStatus.textContent = 'Best-match search is unavailable right now. Word matches are shown instead.';
+        }
       }
     };
-    modelWorker.onerror = (event) => {
-      status.textContent = 'Setup paused. Retry to continue where it stopped.';
-      enable.disabled = false;
-      choice.disabled = false;
-      enable.textContent = 'Retry AI setup';
-      progress.hidden = true;
-      modelWorker = null;
+    searchWorker.onerror = () => {
+      if (chatSearchRequestId) finishChatSearch(keywordRetrieve(chatToolQuery || currentQuestion));
+      semanticStatus.textContent = 'Best-match search is unavailable right now. Word matches are shown instead.';
+      searchWorker = null;
     };
-    modelWorker.postMessage({ type: 'init', model: selected });
-  });
+  }
 
-  generate.addEventListener('click', () => {
-    if (!modelReady || !retrieved.length) return;
-    generate.disabled = true;
-    generate.textContent = 'Writing answer…';
-    answer.hidden = false;
-    answer.innerHTML = '<h3>Answer</h3>Reviewing the matched projects…';
+  function finishChatSearch(matches) {
+    chatSearchRequestId = 0;
+    chatRetrieved = matches;
+    addLog(`Search found ${matches.length} relevant result${matches.length === 1 ? '' : 's'}.`);
+    renderChatResults(matches);
+    setStage(`Found ${matches.length} results. Using them to write the answer…`);
     modelWorker.postMessage({
       type: 'generate',
-      question: query.value.trim(),
-      projects: retrieved.map((project, index) => ({
+      requestId: chatRequestId,
+      question: currentQuestion,
+      projects: matches.map((project, index) => ({
         citation: index + 1,
         title: project.title,
         description: project.description,
+        details: project.details || '',
         year: project.year,
         context: project.context,
         category: project.category,
@@ -159,41 +316,27 @@
         url: project.url,
       })),
     });
-  });
+  }
 
-  function runSemanticSearch(text) {
-    if (!searchWorker) {
-      searchWorker = new Worker('search-worker.js?v=20260712-2', { type: 'module' });
-      searchWorker.onmessage = ({ data }) => {
-        if (data.type === 'status') semanticStatus.textContent = data.message;
-        if (data.type === 'results' && data.requestId === searchRequestId) {
-          retrieved = data.scores.slice(0, 7).map(({ index, score }) => ({
-            ...projects[index],
-            relevance: Math.max(0, score * 100),
-          }));
-          semanticStatus.textContent = 'Best matches ready.';
-          showEvidence();
-        }
-        if (data.type === 'error' && data.requestId === searchRequestId) {
-          semanticStatus.textContent = 'Best-match search is unavailable right now. Word matches are shown instead.';
-        }
-      };
-      searchWorker.onerror = (event) => {
-        semanticStatus.textContent = 'Best-match search is unavailable right now. Word matches are shown instead.';
-        searchWorker = null;
-      };
-    }
+  function renderChatResults(matches) {
+    chatToolResults.innerHTML = matches.length
+      ? `<strong>Search results</strong>${matches.map((project, index) => (
+        `<div id="chat-result-${index + 1}" class="chat-tool-result"><span>[${index + 1}] ${escapeHtml(project.title)}</span>`
+        + `${project.url ? `<a href="${escapeAttribute(project.url)}" target="_blank" rel="noreferrer">Open</a>` : ''}</div>`
+      )).join('')}`
+      : '<p>No strong project match was found.</p>';
+  }
 
-    searchRequestId += 1;
-    searchWorker.postMessage({
-      type: 'search',
-      requestId: searchRequestId,
-      query: text,
-      projects: projects.map((project, index) => ({
-        index,
-        text: `${project.title}. ${project.description}. ${project.broad}. ${project.category}. ${project.tags.join(', ')}. ${project.context}.`,
-      })),
-    });
+  function setStage(message, done = false) {
+    chatProgress.hidden = false;
+    chatProgress.classList.toggle('is-done', done);
+    chatStage.querySelector('span:last-child').textContent = message;
+  }
+
+  function addLog(message) {
+    const item = document.createElement('li');
+    item.textContent = message;
+    chatLog.appendChild(item);
   }
 
   function keywordRetrieve(text) {
@@ -204,7 +347,7 @@
         title: project.title.toLowerCase(),
         tags: project.tags.join(' ').toLowerCase(),
         category: `${project.broad} ${project.category}`.toLowerCase(),
-        description: project.description.toLowerCase(),
+        description: `${project.description} ${project.details || ''}`.toLowerCase(),
       };
       let score = 0;
       for (const term of terms) {
@@ -224,7 +367,7 @@
   function exactKeywordRetrieve(text) {
     const terms = tokenize(text);
     return projects.map((project) => {
-      const haystack = `${project.title} ${project.description} ${project.broad} ${project.category} ${project.context} ${project.tags.join(' ')}`.toLowerCase();
+      const haystack = `${project.title} ${project.description} ${project.details || ''} ${project.broad} ${project.category} ${project.context} ${project.tags.join(' ')}`.toLowerCase();
       const matches = terms.filter((term) => haystack.includes(term)).length;
       return { ...project, relevance: matches * 10 + project.significance / 100 };
     }).filter((project) => project.relevance > 1)
@@ -239,22 +382,84 @@
 
   function showEvidence() {
     output.hidden = false;
-    answer.hidden = true;
     openDialog.disabled = !retrieved.length;
-    chatSearchHint.hidden = retrieved.length > 0;
-    generate.disabled = !modelReady || !retrieved.length;
     evidence.innerHTML = retrieved.length
       ? retrieved.map((project, index) => (
-        `<article class="evidence-item"><h4>${index + 1}. ${project.title}</h4>`
-        + `<p>${project.description}</p>`
-        + `${project.url ? `<a href="${project.url}" target="_blank" rel="noreferrer">Open project →</a>` : ''}</article>`
+        `<article class="evidence-item"><h4>${index + 1}. ${escapeHtml(project.title)}</h4>`
+        + `<p>${escapeHtml(project.description)}</p>`
+        + `${project.url ? `<a href="${escapeAttribute(project.url)}" target="_blank" rel="noreferrer">Open project →</a>` : ''}</article>`
       )).join('')
       : '<p>No strong match found. Try different terms.</p>';
   }
 
-  function escapeHtml(text) {
+  function renderMarkdown(markdown) {
+    const lines = String(markdown || '').replace(/\r/g, '').split('\n');
+    let html = '';
+    let list = '';
+    let inCode = false;
+    let code = '';
+    const closeList = () => {
+      if (list) html += `</${list}>`;
+      list = '';
+    };
+    for (const rawLine of lines) {
+      if (rawLine.trim().startsWith('```')) {
+        closeList();
+        if (inCode) {
+          html += `<pre><code>${escapeHtml(code.replace(/\n$/, ''))}</code></pre>`;
+          code = '';
+        }
+        inCode = !inCode;
+        continue;
+      }
+      if (inCode) {
+        code += `${rawLine}\n`;
+        continue;
+      }
+      const heading = rawLine.match(/^(#{1,4})\s+(.+)$/);
+      const bullet = rawLine.match(/^\s*[-*]\s+(.+)$/);
+      const numbered = rawLine.match(/^\s*\d+[.)]\s+(.+)$/);
+      if (heading) {
+        closeList();
+        const level = Math.min(4, heading[1].length + 1);
+        html += `<h${level}>${inlineMarkdown(heading[2])}</h${level}>`;
+      } else if (bullet || numbered) {
+        const wanted = bullet ? 'ul' : 'ol';
+        if (list !== wanted) {
+          closeList();
+          list = wanted;
+          html += `<${list}>`;
+        }
+        html += `<li>${inlineMarkdown((bullet || numbered)[1])}</li>`;
+      } else if (!rawLine.trim()) {
+        closeList();
+      } else {
+        closeList();
+        html += `<p>${inlineMarkdown(rawLine)}</p>`;
+      }
+    }
+    closeList();
+    if (inCode && code) html += `<pre><code>${escapeHtml(code)}</code></pre>`;
+    return html || '<p>Waiting for answer…</p>';
+  }
+
+  function inlineMarkdown(value) {
+    return escapeHtml(value)
+      .replace(/`([^`]+)`/g, '<code>$1</code>')
+      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+      .replace(/__([^_]+)__/g, '<strong>$1</strong>')
+      .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+      .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer">$1</a>')
+      .replace(/\[(\d+)\]/g, '<a href="#chat-result-$1">[$1]</a>');
+  }
+
+  function escapeHtml(value) {
     const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML.replace(/\n/g, '<br>');
+    div.textContent = String(value || '');
+    return div.innerHTML;
+  }
+
+  function escapeAttribute(value) {
+    return escapeHtml(value).replace(/"/g, '&quot;');
   }
 })();

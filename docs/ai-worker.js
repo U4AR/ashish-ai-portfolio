@@ -1,6 +1,7 @@
 import {
   AutoProcessor,
   Gemma4ForConditionalGeneration,
+  TextStreamer,
   env,
   pipeline,
 } from 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.2.0';
@@ -61,11 +62,23 @@ self.onmessage = async ({ data }) => {
           dtype: 'q4f16',
           progress_callback,
         });
-        runGeneration = async (messages) => extractText(await generator(messages, {
-          max_new_tokens: 280,
+        runGeneration = async (messages, options = {}) => {
+          let streamed = '';
+          const streamer = options.stream ? new TextStreamer(generator.tokenizer, {
+            skip_prompt: true,
+            callback_function: (text) => {
+              streamed += text;
+              self.postMessage({ type: 'token', requestId: options.requestId, text });
+            },
+          }) : undefined;
+          const result = await generator(messages, {
+          max_new_tokens: options.maxNewTokens || 320,
           do_sample: false,
           return_full_text: false,
-        }));
+          ...(streamer ? { streamer } : {}),
+          });
+          return streamed.trim() || extractText(result);
+        };
       } else {
         const processor = await AutoProcessor.from_pretrained(selected.id, { progress_callback });
         const model = await Gemma4ForConditionalGeneration.from_pretrained(selected.id, {
@@ -73,7 +86,7 @@ self.onmessage = async ({ data }) => {
           dtype: 'q4f16',
           progress_callback,
         });
-        runGeneration = async (messages) => {
+        runGeneration = async (messages, options = {}) => {
           const multimodalMessages = messages.map((message) => ({
             role: message.role,
             content: [{ type: 'text', text: message.content }],
@@ -83,12 +96,21 @@ self.onmessage = async ({ data }) => {
             add_generation_prompt: true,
           });
           const inputs = await processor(prompt, null, null, { add_special_tokens: false });
+          let streamed = '';
+          const streamer = options.stream && processor.tokenizer ? new TextStreamer(processor.tokenizer, {
+            skip_prompt: true,
+            callback_function: (text) => {
+              streamed += text;
+              self.postMessage({ type: 'token', requestId: options.requestId, text });
+            },
+          }) : undefined;
           const outputs = await model.generate({
             ...inputs,
-            max_new_tokens: 280,
+            max_new_tokens: options.maxNewTokens || 320,
             do_sample: false,
+            ...(streamer ? { streamer } : {}),
           });
-          return String(processor.batch_decode(
+          return streamed.trim() || String(processor.batch_decode(
             outputs.slice(null, [inputs.input_ids.dims.at(-1), null]),
             { skip_special_tokens: true },
           )[0] || 'No answer was generated.').trim();
@@ -101,6 +123,18 @@ self.onmessage = async ({ data }) => {
       return;
     }
 
+    if (data.type === 'plan') {
+      if (!runGeneration) throw new Error('The local model has not been loaded yet.');
+      const messages = [{
+        role: 'user',
+        content: `You are a tool-calling planner for Ashish T Vasant's portfolio. Rephrase the visitor's question into a concise project-search query, preserving names, technologies, dates and domains. Then call the only available tool. Return ONLY one JSON object and no Markdown or explanation.\n\nTool: search_projects(query: string)\nRequired format: {"tool":"search_projects","query":"concise search query"}\n\nVisitor question: ${data.question}`,
+      }];
+      const planText = await runGeneration(messages, { maxNewTokens: 90 });
+      const toolCall = parseToolCall(planText, data.question);
+      self.postMessage({ type: 'tool_call', requestId: data.requestId, ...toolCall });
+      return;
+    }
+
     if (data.type === 'generate') {
       if (!runGeneration) throw new Error('The local model has not been loaded yet.');
 
@@ -108,16 +142,24 @@ self.onmessage = async ({ data }) => {
         `[${project.citation}] ${project.title} (${project.year}; ${project.context}; ${project.category})\n`
         + `${project.description}\n`
         + `Technologies: ${project.tags.join(', ')}\n`
+        + `${project.details ? `Additional resume or project context: ${project.details}\n` : ''}`
         + `Source: ${project.url || 'portfolio record'}`
       )).join('\n\n');
       const messages = [{
         role: 'user',
-        content: `Answer questions about Ashish T Vasant only from the supplied project evidence. Be concise and factual. Every project bullet must include its bracketed evidence number, for example [1]. If evidence is insufficient, say so. Do not invent employers, outcomes, metrics, links, or technologies.\n\nQuestion: ${data.question}\n\nRetrieved project evidence:\n${context}\n\nWrite a direct answer with citations, then a short Recommended projects list.`,
+        content: `Answer questions about Ashish T Vasant only from the supplied evidence. Be concise and factual. Use Markdown with short headings and lists where useful. Every factual project or resume claim must include its bracketed evidence number, for example [1]. If evidence is insufficient, say so. Do not invent employers, outcomes, metrics, links, technologies or dates.\n\nQuestion: ${data.question}\n\nRetrieved evidence:\n${context}\n\nWrite a direct answer with citations, then a short "Relevant projects" list.`,
       }];
 
+      self.postMessage({ type: 'answer_start', requestId: data.requestId });
+      const generated = await runGeneration(messages, {
+        maxNewTokens: 420,
+        stream: true,
+        requestId: data.requestId,
+      });
       self.postMessage({
         type: 'answer',
-        text: ensureProjectCitations(await runGeneration(messages), data.projects),
+        requestId: data.requestId,
+        text: ensureProjectCitations(generated, data.projects),
       });
     }
   } catch (error) {
@@ -145,4 +187,27 @@ function ensureProjectCitations(text, projects) {
     cited = cited.replace(new RegExp(escapedTitle, 'i'), (title) => `${title} ${marker}`);
   }
   return cited;
+}
+
+function parseToolCall(text, originalQuestion) {
+  const objectMatch = String(text || '').match(/\{[\s\S]*?\}/);
+  if (objectMatch) {
+    try {
+      const parsed = JSON.parse(objectMatch[0]);
+      const query = String(parsed.query || '').trim();
+      if (parsed.tool === 'search_projects' && query) {
+        return { tool: 'search_projects', query: query.slice(0, 220) };
+      }
+    } catch {}
+  }
+  const cleaned = String(text || '')
+    .replace(/```(?:json)?|```/gi, '')
+    .replace(/search_projects|tool|query/gi, '')
+    .replace(/[{}\[\]":]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return {
+    tool: 'search_projects',
+    query: (cleaned.length >= 3 && cleaned.length <= 220 ? cleaned : originalQuestion).slice(0, 220),
+  };
 }
