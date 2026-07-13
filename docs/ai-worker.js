@@ -151,9 +151,11 @@ self.onmessage = async ({ data }) => {
 
 Rules:
 - Answer the question immediately and stay to the point.
-- Use at most 120 words; usually 2-5 sentences is enough.
+- Start with the specific answer, not an introduction such as "Here is a summary".
+- Use at most 100 words; usually 2-4 sentences is enough.
 - For a simple question, use plain paragraphs with no heading.
 - Mention no more than the 3 most relevant projects unless the visitor explicitly asks for a longer or complete list.
+- Prefer concrete project names and actions over broad claims about Ashish's background.
 - Do not repeat the question, describe the search process, add a generic summary, or append a "Relevant projects" section.
 - Use a short Markdown list only when it makes the answer clearer.
 - Every factual project or resume claim must include its bracketed evidence number, for example [1].
@@ -176,7 +178,7 @@ Write only the concise cited answer.`,
       self.postMessage({
         type: 'answer',
         requestId: data.requestId,
-        text: ensureProjectCitations(generated, data.projects),
+        text: finalizeAnswer(generated, data.projects),
       });
     }
   } catch (error) {
@@ -204,6 +206,25 @@ function ensureProjectCitations(text, projects) {
     cited = cited.replace(new RegExp(escapedTitle, 'i'), (title) => `${title} ${marker}`);
   }
   return cited;
+}
+
+function finalizeAnswer(text, projects) {
+  const cited = ensureProjectCitations(text, projects);
+  const hasValidCitation = projects.some((project) => cited.includes(`[${project.citation}]`));
+  const soundsGeneric = /here(?:'s| is) (?:a )?(?:concise )?summary|strong background|extensive experience|proven track record|various domains/i.test(cited);
+  if (!hasValidCitation || soundsGeneric) return buildEvidenceAnswer(projects);
+  return cited;
+}
+
+function buildEvidenceAnswer(projects) {
+  if (!projects.length) return 'The portfolio does not contain enough evidence to answer that question.';
+  const specific = projects.filter((project) => !/resume|career profile/i.test(project.title));
+  const selected = (specific.length ? specific : projects).slice(0, 3);
+  return [
+    'The strongest matching evidence is:',
+    '',
+    ...selected.map((project) => `- **${project.title}** — ${project.description} [${project.citation}]`),
+  ].join('\n');
 }
 
 function parseToolCall(text, originalQuestion) {

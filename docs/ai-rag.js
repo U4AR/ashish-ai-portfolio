@@ -41,7 +41,7 @@
   let pageSearchRequestId = 0;
   let chatSearchRequestId = 0;
   let chatRequestId = 0;
-  const CHAT_SEARCH_CACHE_KEY = 'ashish-portfolio-chat-search-v1';
+  const CHAT_SEARCH_CACHE_KEY = 'ashish-portfolio-chat-search-v2';
   const ONE_DAY_MS = 24 * 60 * 60 * 1000;
   const lowMemoryMode = matchMedia('(max-width: 760px)').matches
     || (Number(navigator.deviceMemory || 8) <= 6);
@@ -49,7 +49,7 @@
   const stop = new Set([
     'the', 'a', 'an', 'and', 'or', 'for', 'of', 'to', 'in', 'on', 'with', 'what',
     'which', 'show', 'find', 'project', 'projects', 'work', 'ashish', 'experience',
-    'has', 'have', 'built', 'did', 'about',
+    'has', 'have', 'built', 'did', 'about', 'vasant', 'who', 'is', 'does',
   ]);
   const expansions = {
     ai: ['llm', 'model', 'agent', 'vision', 'rag'],
@@ -173,7 +173,7 @@
     setStage(cached ? 'Opening saved AI…' : 'Preparing AI answers…');
     addLog(cached ? 'Saved AI model found.' : 'AI setup started.');
 
-    modelWorker = new Worker('ai-worker.js?v=20260713-2', { type: 'module' });
+    modelWorker = new Worker('ai-worker.js?v=20260713-3', { type: 'module' });
     modelWorker.onmessage = handleModelMessage;
     modelWorker.onerror = () => handleModelFailure();
     modelWorker.postMessage({ type: 'init', model: selected });
@@ -436,17 +436,16 @@
         category: `${project.broad} ${project.category}`.toLowerCase(),
         description: `${project.description} ${project.details || ''}`.toLowerCase(),
       };
-      let score = 0;
+      let matchScore = 0;
       for (const term of terms) {
-        if (fields.title.includes(term)) score += 8;
-        if (fields.tags.includes(term)) score += 5;
-        if (fields.category.includes(term)) score += 4;
-        if (fields.description.includes(term)) score += 2;
+        if (fields.title.includes(term)) matchScore += 8;
+        if (fields.tags.includes(term)) matchScore += 5;
+        if (fields.category.includes(term)) matchScore += 4;
+        if (fields.description.includes(term)) matchScore += 2;
       }
-      if (fields.title.includes(text.toLowerCase())) score += 12;
-      score += project.significance / 100;
-      return { ...project, relevance: score };
-    }).filter((project) => project.relevance > 0.5)
+      if (fields.title.includes(text.toLowerCase())) matchScore += 12;
+      return { ...project, matchScore, relevance: matchScore + project.significance / 100 };
+    }).filter((project) => project.matchScore > 0)
       .sort((left, right) => right.relevance - left.relevance)
       .slice(0, 7);
   }
