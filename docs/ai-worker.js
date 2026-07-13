@@ -150,13 +150,14 @@ self.onmessage = async ({ data }) => {
         content: `Answer questions about Ashish T Vasant only from the supplied evidence.
 
 Rules:
-- Answer the question immediately and stay to the point.
+- Begin with a direct answer in 1 or 2 sentences.
 - Start with the specific answer, not an introduction such as "Here is a summary".
-- Use at most 100 words; usually 2-4 sentences is enough.
+- After the direct answer, add an "Evidence" list with no more than 3 relevant projects.
+- Use at most 130 words including the evidence list.
 - For a simple question, use plain paragraphs with no heading.
 - Mention no more than the 3 most relevant projects unless the visitor explicitly asks for a longer or complete list.
 - Prefer concrete project names and actions over broad claims about Ashish's background.
-- Do not repeat the question, describe the search process, add a generic summary, or append a "Relevant projects" section.
+- Do not repeat the question, describe the search process, or add a generic summary.
 - Use a short Markdown list only when it makes the answer clearer.
 - Every factual project or resume claim must include its bracketed evidence number, for example [1].
 - If the evidence is insufficient, say so briefly. Do not invent employers, outcomes, metrics, links, technologies or dates.
@@ -166,7 +167,7 @@ Question: ${data.question}
 Retrieved evidence:
 ${context}
 
-Write only the concise cited answer.`,
+Required order: direct answer first, then the short cited evidence list.`,
       }];
 
       self.postMessage({ type: 'answer_start', requestId: data.requestId });
@@ -178,7 +179,7 @@ Write only the concise cited answer.`,
       self.postMessage({
         type: 'answer',
         requestId: data.requestId,
-        text: finalizeAnswer(generated, data.projects, data.question),
+        text: formatAnswerWithEvidence(generated, data.projects, data.question),
       });
     }
   } catch (error) {
@@ -208,33 +209,53 @@ function ensureProjectCitations(text, projects) {
   return cited;
 }
 
-function finalizeAnswer(text, projects, question) {
-  const cited = ensureProjectCitations(text, projects);
-  const validCitations = projects.filter((project) => cited.includes(`[${project.citation}]`));
-  const wordCount = cited.trim().split(/\s+/).filter(Boolean).length;
-  const soundsGeneric = /here(?:'s| is) (?:a )?(?:concise )?summary|based on the (?:provided|supplied) evidence|strong background|extensive experience|proven track record|various domains/i.test(cited);
-  const repeatsResults = /relevant projects|matching projects/i.test(cited);
-  const unfinished = cited.length > 0 && !/[.!?\])}]$/.test(cited.trim());
-  if (!validCitations.length || validCitations.length > 3 || wordCount > 110 || soundsGeneric || repeatsResults || unfinished) {
-    return buildEvidenceAnswer(projects, question);
-  }
-  return cited;
-}
-
-function buildEvidenceAnswer(projects, question = '') {
+function formatAnswerWithEvidence(text, projects, question = '') {
   if (!projects.length) return 'The portfolio does not contain enough evidence to answer that question.';
   const specific = projects.filter((project) => !/resume|career profile/i.test(project.title));
   const selected = (specific.length ? specific : projects).slice(0, 3);
-  if (/\b(compare|comparison|difference|versus|vs\.?)\b/i.test(question) && selected.length >= 2) {
-    return selected.slice(0, 2).map((project) => (
-      `- **${project.title}:** ${project.description} [${project.citation}]`
-    )).join('\n');
-  }
+  const directAnswer = extractDirectAnswer(text, question, selected);
   return [
-    'The strongest matching evidence is:',
+    directAnswer,
+    '',
+    '**Evidence**',
     '',
     ...selected.map((project) => `- **${project.title}** — ${project.description} [${project.citation}]`),
   ].join('\n');
+}
+
+function extractDirectAnswer(text, question, projects) {
+  const citations = projects.map((project) => `[${project.citation}]`).join('');
+  let cleaned = ensureProjectCitations(String(text || ''), projects)
+    .replace(/\r/g, '')
+    .split(/\n\s*(?:#{1,4}\s*)?(?:\*\*)?(?:evidence|relevant projects|matching projects|projects)(?:\*\*)?\s*:?/i)[0]
+    .split(/\n\s*[-*]\s+/)[0]
+    .replace(/here(?:'s| is) (?:a )?(?:concise )?summary[^.!?]*[.!?]/gi, '')
+    .replace(/\[(?:\d+\s*,\s*)+\d+\]|\[\d+\]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const sentences = cleaned.match(/[^.!?]+[.!?]+/g) || [];
+  cleaned = sentences.slice(0, 2).join(' ').trim();
+  const wordCount = cleaned.split(/\s+/).filter(Boolean).length;
+  const vague = /based on the (?:provided|supplied) evidence|strong background|extensive experience|proven track record|various domains/i.test(cleaned);
+  if (!cleaned || wordCount < 5 || wordCount > 60 || vague) {
+    cleaned = buildQuestionLead(question, projects);
+  }
+  return `${cleaned.replace(/\s+$/, '')} ${citations}`.trim();
+}
+
+function buildQuestionLead(question, projects) {
+  if (/\b(compare|comparison|difference|versus|vs\.?)\b/i.test(question) && projects.length >= 2) {
+    return `${projects[0].title} is ${lowercaseFirst(projects[0].description)} ${projects[1].title}, by contrast, is ${lowercaseFirst(projects[1].description)}`;
+  }
+  const experience = question.match(/\bwhat\s+(.{2,60}?)\s+experience\s+(?:does|do)\b/i)?.[1]?.trim();
+  const titles = projects.map((project) => project.title).join(', ').replace(/, ([^,]*)$/, ' and $1');
+  if (experience) return `Ashish has practical ${experience} experience demonstrated through ${titles}.`;
+  return `Ashish's most relevant work for this question includes ${titles}.`;
+}
+
+function lowercaseFirst(value) {
+  const text = String(value || '').trim();
+  return text ? `${text.charAt(0).toLowerCase()}${text.slice(1)}` : '';
 }
 
 function parseToolCall(text, originalQuestion) {
