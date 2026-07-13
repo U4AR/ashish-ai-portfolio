@@ -129,7 +129,7 @@ self.onmessage = async ({ data }) => {
         role: 'user',
         content: `You are a tool-calling planner for Ashish T Vasant's portfolio. Rephrase the visitor's question into a concise project-search query, preserving names, technologies, dates and domains. Then call the only available tool. Return ONLY one JSON object and no Markdown or explanation.\n\nTool: search_projects(query: string)\nRequired format: {"tool":"search_projects","query":"concise search query"}\n\nVisitor question: ${data.question}`,
       }];
-      const planText = await runGeneration(messages, { maxNewTokens: 90 });
+      const planText = await runGeneration(messages, { maxNewTokens: 54 });
       const toolCall = parseToolCall(planText, data.question);
       self.postMessage({ type: 'tool_call', requestId: data.requestId, ...toolCall });
       return;
@@ -152,7 +152,7 @@ self.onmessage = async ({ data }) => {
 
       self.postMessage({ type: 'answer_start', requestId: data.requestId });
       const generated = await runGeneration(messages, {
-        maxNewTokens: 420,
+        maxNewTokens: data.lowMemory ? 220 : 300,
         stream: true,
         requestId: data.requestId,
       });

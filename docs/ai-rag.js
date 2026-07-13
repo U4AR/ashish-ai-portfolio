@@ -36,12 +36,15 @@
   let currentQuestion = '';
   let chatToolQuery = '';
   let streamedAnswer = '';
+  let streamRenderScheduled = false;
   let requestSequence = 0;
   let pageSearchRequestId = 0;
   let chatSearchRequestId = 0;
   let chatRequestId = 0;
   const CHAT_SEARCH_CACHE_KEY = 'ashish-portfolio-chat-search-v1';
   const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+  const lowMemoryMode = matchMedia('(max-width: 760px)').matches
+    || (Number(navigator.deviceMemory || 8) <= 6);
 
   const stop = new Set([
     'the', 'a', 'an', 'and', 'or', 'for', 'of', 'to', 'in', 'on', 'with', 'what',
@@ -126,7 +129,7 @@
     }
   }
 
-  function startModelLoad(questionAfterReady = '') {
+  async function startModelLoad(questionAfterReady = '') {
     if (questionAfterReady) pendingQuestion = questionAfterReady;
     if (modelReady) {
       if (pendingQuestion) requestToolPlan(pendingQuestion);
@@ -140,9 +143,21 @@
       return;
     }
 
+    modelLoading = true;
+    enable.disabled = true;
+    choice.disabled = true;
+    enable.textContent = 'Checking saved AI…';
+    status.textContent = 'Checking for the saved AI model…';
+
     const selected = choice.value;
     const size = selected === 'large' ? '3.38 GB' : '0.8 GB';
-    if (!confirm(`AI answers need a one-time download of about ${size}. Continue?`)) {
+    const cached = await isModelCached(selected);
+    if (!cached && !confirm(`AI answers need a one-time download of about ${size}. Continue?`)) {
+      modelLoading = false;
+      enable.disabled = false;
+      choice.disabled = false;
+      enable.textContent = 'Enable AI answers';
+      status.textContent = 'AI answers are off until you enable them.';
       setStage('AI setup was not started.', true);
       chatSubmit.disabled = false;
       pendingQuestion = '';
@@ -150,14 +165,13 @@
     }
 
     navigator.storage?.persist?.().catch(() => {});
-    modelLoading = true;
-    enable.disabled = true;
-    choice.disabled = true;
-    enable.textContent = 'Preparing AI answers…';
+    enable.textContent = cached ? 'Opening saved AI…' : 'Preparing AI answers…';
     progress.hidden = false;
-    status.textContent = 'Preparing AI answers. You can retry if the connection is interrupted.';
-    setStage('Preparing AI answers…');
-    addLog('AI setup started.');
+    status.textContent = cached
+      ? 'Opening the saved AI model…'
+      : 'Preparing AI answers. You can retry if the connection is interrupted.';
+    setStage(cached ? 'Opening saved AI…' : 'Preparing AI answers…');
+    addLog(cached ? 'Saved AI model found.' : 'AI setup started.');
 
     modelWorker = new Worker('ai-worker.js?v=20260713-1', { type: 'module' });
     modelWorker.onmessage = handleModelMessage;
@@ -179,6 +193,7 @@
       progress.hidden = true;
       enable.textContent = 'AI answers enabled';
       status.textContent = 'AI answers are ready to use.';
+      markModelCached(choice.value);
       addLog('AI answers ready.');
       if (pendingQuestion) requestToolPlan(pendingQuestion);
       else setStage('Ready for a question.', true);
@@ -193,20 +208,23 @@
     }
     if (data.type === 'answer_start' && data.requestId === chatRequestId) {
       streamedAnswer = '';
+      streamRenderScheduled = false;
       answer.hidden = false;
       answer.innerHTML = '<p>Starting answer…</p>';
+      answer.classList.add('is-streaming');
       addLog('Answer generation started.');
       setStage('Writing the answer…');
     }
     if (data.type === 'token' && data.requestId === chatRequestId) {
       streamedAnswer += data.text || '';
       answer.hidden = false;
-      answer.innerHTML = renderMarkdown(streamedAnswer);
+      scheduleStreamRender();
     }
     if (data.type === 'answer' && data.requestId === chatRequestId) {
       streamedAnswer = data.text || streamedAnswer;
       answer.hidden = false;
       answer.innerHTML = renderMarkdown(streamedAnswer);
+      answer.classList.remove('is-streaming');
       addLog('Answer completed.');
       setStage('Answer ready.', true);
       chatSubmit.disabled = false;
@@ -215,9 +233,13 @@
     if (data.type === 'error') {
       if (!modelReady) handleModelFailure();
       else {
-        status.textContent = 'The last request stopped. You can try the question again.';
-        setStage('The request stopped before completion.', true);
-        addLog('Request stopped.');
+        const fallbackMatches = chatRetrieved.length ? chatRetrieved : keywordRetrieve(currentQuestion).slice(0, 4);
+        answer.hidden = false;
+        answer.classList.remove('is-streaming');
+        answer.innerHTML = renderEvidenceFallback(fallbackMatches);
+        status.textContent = 'Showing the matched project evidence.';
+        setStage('Search results ready. This device could not finish the generated summary.', true);
+        addLog('Generated summary stopped; matched evidence is shown instead.');
         chatSubmit.disabled = false;
       }
     }
@@ -311,19 +333,20 @@
 
   function finishChatSearch(matches) {
     chatSearchRequestId = 0;
-    chatRetrieved = matches;
-    addLog(`Search found ${matches.length} relevant result${matches.length === 1 ? '' : 's'}.`);
-    renderChatResults(matches);
-    setStage(`Found ${matches.length} results. Using them to write the answer…`);
+    chatRetrieved = matches.slice(0, lowMemoryMode ? 4 : 7);
+    addLog(`Search found ${chatRetrieved.length} relevant result${chatRetrieved.length === 1 ? '' : 's'}.`);
+    renderChatResults(chatRetrieved);
+    setStage(`Found ${chatRetrieved.length} results. Using them to write the answer…`);
     modelWorker.postMessage({
       type: 'generate',
       requestId: chatRequestId,
       question: currentQuestion,
-      projects: matches.map((project, index) => ({
+      lowMemory: lowMemoryMode,
+      projects: chatRetrieved.map((project, index) => ({
         citation: index + 1,
         title: project.title,
         description: project.description,
-        details: project.details || '',
+        details: (project.details || '').slice(0, lowMemoryMode ? 1400 : 3200),
         year: project.year,
         context: project.context,
         category: project.category,
@@ -346,6 +369,55 @@
     chatProgress.hidden = false;
     chatProgress.classList.toggle('is-done', done);
     chatStage.querySelector('span:last-child').textContent = message;
+  }
+
+  function scheduleStreamRender() {
+    if (streamRenderScheduled) return;
+    streamRenderScheduled = true;
+    requestAnimationFrame(() => {
+      streamRenderScheduled = false;
+      answer.innerHTML = renderMarkdown(streamedAnswer);
+    });
+  }
+
+  function renderEvidenceFallback(matches) {
+    const markdown = [
+      '### Matching project evidence',
+      '',
+      ...matches.map((project, index) => (
+        `- **${project.title}** [${index + 1}] — ${project.description}`
+      )),
+    ].join('\n');
+    return renderMarkdown(markdown);
+  }
+
+  async function isModelCached(selected) {
+    const modelPath = selected === 'large'
+      ? 'onnx-community/gemma-4-E2B-it-ONNX'
+      : 'onnx-community/gemma-3-1b-it-ONNX';
+    try {
+      if (!('caches' in window)) return hasRecentModelMarker(selected);
+      const cache = await caches.open('transformers-cache');
+      const requests = await cache.keys();
+      const hasCompleteBulkWeights = requests.some((request) => {
+        const url = decodeURIComponent(request.url);
+        return url.includes(modelPath) && /\.onnx_data(?:\?|$)/.test(url);
+      });
+      return hasCompleteBulkWeights || hasRecentModelMarker(selected);
+    } catch {
+      return hasRecentModelMarker(selected);
+    }
+  }
+
+  function hasRecentModelMarker(selected) {
+    const savedAt = Number(localStorage.getItem(`ashish-ai-ready-${selected}`) || 0);
+    return savedAt > 0 && Date.now() - savedAt < 30 * ONE_DAY_MS;
+  }
+
+  function markModelCached(selected) {
+    try {
+      localStorage.setItem(`ashish-ai-ready-${selected}`, String(Date.now()));
+    } catch {}
   }
 
   function addLog(message) {

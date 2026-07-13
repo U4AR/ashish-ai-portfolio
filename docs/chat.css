@@ -1,1 +1,1 @@
-.info-tip::after{top:calc(100% + 9px);bottom:auto}.rag-answer{white-space:normal}
+.info-tip::after{top:calc(100% + 9px);bottom:auto}.rag-answer{white-space:normal}.rag-answer.is-streaming::after{content:"";display:inline-block;width:7px;height:1em;margin-left:3px;background:var(--blue);vertical-align:-2px;animation:stream-cursor .8s steps(1) infinite}@keyframes stream-cursor{50%{opacity:0}}
