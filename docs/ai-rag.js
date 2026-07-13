@@ -2,6 +2,7 @@
   const byId = (id) => document.getElementById(id);
   const form = byId('ragForm');
   const query = byId('ragQuery');
+  const searchMode = byId('searchMode');
   const output = byId('ragOutput');
   const evidence = byId('ragEvidence');
   const answer = byId('ragAnswer');
@@ -14,6 +15,11 @@
   const status = byId('modelStatus');
   const semanticStatus = byId('semanticStatus');
   const progress = byId('modelProgress');
+  const headerAiChat = byId('headerAiChat');
+  const chatSearchHint = byId('chatSearchHint');
+  const githubDialog = byId('githubDialog');
+  const openGitHubDialog = byId('openGitHubDialog');
+  const closeGitHubDialog = byId('closeGitHubDialog');
 
   let modelWorker = null;
   let searchWorker = null;
@@ -42,24 +48,35 @@
     const text = query.value.trim();
     if (!text) return;
 
-    retrieved = keywordRetrieve(text);
+    retrieved = searchMode.value === 'keyword' ? exactKeywordRetrieve(text) : keywordRetrieve(text);
     showEvidence();
-    semanticStatus.textContent = 'Preparing semantic matches; keyword matches are shown meanwhile…';
+    if (searchMode.value === 'keyword') {
+      semanticStatus.textContent = 'Showing matches for the words in your search.';
+      return;
+    }
+    semanticStatus.textContent = 'Finding the closest matches…';
     runSemanticSearch(text);
   });
 
   openDialog.addEventListener('click', () => {
     if (retrieved.length) dialog.showModal();
   });
+  headerAiChat.addEventListener('click', () => dialog.showModal());
   closeDialog.addEventListener('click', () => dialog.close());
   dialog.addEventListener('click', (event) => {
     if (event.target === dialog) dialog.close();
   });
+  openGitHubDialog.addEventListener('click', () => githubDialog.showModal());
+  closeGitHubDialog.addEventListener('click', () => githubDialog.close());
+  githubDialog.addEventListener('click', (event) => {
+    if (event.target === githubDialog) githubDialog.close();
+  });
+  byId('githubDialog').querySelector('.github-all-link').addEventListener('click', () => githubDialog.close());
 
   enable.addEventListener('click', () => {
     if (modelWorker || modelReady) return;
     if (!('gpu' in navigator)) {
-      status.textContent = 'WebGPU is unavailable in this browser. Semantic retrieval still works.';
+      status.textContent = 'AI answers are not supported in this browser. Project search still works.';
       return;
     }
 
@@ -68,54 +85,54 @@
       ? { label: 'Gemma 4 E2B q4f16', size: '3.38 GB' }
       : { label: 'Gemma 3 1B q4f16', size: '0.8 GB' };
     const approved = confirm(
-      `This will download about ${details.size} for ${details.label}. The download is saved in resumable 8 MB chunks, and substantial GPU memory may be used. Continue?`,
+      `AI answers need a one-time download of about ${details.size}. Continue?`,
     );
     if (!approved) return;
 
     navigator.storage?.persist?.().catch(() => {});
     enable.disabled = true;
     choice.disabled = true;
-    enable.textContent = 'Loading Gemma…';
+    enable.textContent = 'Preparing AI answers…';
     progress.hidden = false;
-    status.textContent = 'Starting resumable model download…';
+    status.textContent = 'Preparing AI answers. You can retry if the connection is interrupted.';
 
     modelWorker = new Worker('ai-worker.js?v=20260712-9', { type: 'module' });
     modelWorker.onmessage = ({ data }) => {
       if (data.type === 'progress') {
         const pct = Math.max(0, Math.min(100, Math.round(data.value || 0)));
         progress.value = pct;
-        status.textContent = data.message || `Downloading model: ${pct}%`;
+        status.textContent = `Preparing AI answers: ${pct}%`;
       }
       if (data.type === 'ready') {
         modelReady = true;
         progress.value = 100;
         progress.hidden = true;
-        enable.textContent = `${data.label || details.label} enabled`;
-        status.textContent = 'Local answer model ready. Completed weights are cached for later sessions.';
+        enable.textContent = 'AI answers enabled';
+        status.textContent = 'AI answers are ready to use.';
         generate.disabled = !retrieved.length;
       }
       if (data.type === 'answer') {
         answer.hidden = false;
-        answer.innerHTML = `<h3>Local answer</h3>${escapeHtml(data.text)}`;
+        answer.innerHTML = `<h3>Answer</h3>${escapeHtml(data.text)}`;
         generate.disabled = false;
-        generate.textContent = 'Generate cited answer locally';
+        generate.textContent = 'Answer using matched projects';
       }
       if (data.type === 'error') {
-        status.textContent = `Local model paused: ${data.message} Retry to continue from saved chunks.`;
+        status.textContent = 'Setup paused. Retry to continue where it stopped.';
         progress.hidden = true;
         enable.disabled = false;
         choice.disabled = false;
-        enable.textContent = 'Resume selected model download';
+        enable.textContent = 'Retry AI setup';
         generate.disabled = true;
         modelWorker?.terminate();
         modelWorker = null;
       }
     };
     modelWorker.onerror = (event) => {
-      status.textContent = `Local model worker stopped: ${event.message || 'unknown error'}. Retry to continue from saved chunks.`;
+      status.textContent = 'Setup paused. Retry to continue where it stopped.';
       enable.disabled = false;
       choice.disabled = false;
-      enable.textContent = 'Resume selected model download';
+      enable.textContent = 'Retry AI setup';
       progress.hidden = true;
       modelWorker = null;
     };
@@ -125,9 +142,9 @@
   generate.addEventListener('click', () => {
     if (!modelReady || !retrieved.length) return;
     generate.disabled = true;
-    generate.textContent = 'Generating locally…';
+    generate.textContent = 'Writing answer…';
     answer.hidden = false;
-    answer.innerHTML = '<h3>Local answer</h3>Generating from the retrieved project evidence…';
+    answer.innerHTML = '<h3>Answer</h3>Reviewing the matched projects…';
     modelWorker.postMessage({
       type: 'generate',
       question: query.value.trim(),
@@ -146,7 +163,7 @@
 
   function runSemanticSearch(text) {
     if (!searchWorker) {
-      searchWorker = new Worker('search-worker.js?v=20260712-1', { type: 'module' });
+      searchWorker = new Worker('search-worker.js?v=20260712-2', { type: 'module' });
       searchWorker.onmessage = ({ data }) => {
         if (data.type === 'status') semanticStatus.textContent = data.message;
         if (data.type === 'results' && data.requestId === searchRequestId) {
@@ -154,15 +171,15 @@
             ...projects[index],
             relevance: Math.max(0, score * 100),
           }));
-          semanticStatus.textContent = 'Semantic matches ready. Search embeddings remain cached locally.';
+          semanticStatus.textContent = 'Best matches ready.';
           showEvidence();
         }
         if (data.type === 'error' && data.requestId === searchRequestId) {
-          semanticStatus.textContent = `Semantic search unavailable: ${data.message}. Keyword matches are shown.`;
+          semanticStatus.textContent = 'Best-match search is unavailable right now. Word matches are shown instead.';
         }
       };
       searchWorker.onerror = (event) => {
-        semanticStatus.textContent = `Semantic search unavailable: ${event.message || 'worker error'}. Keyword matches are shown.`;
+        semanticStatus.textContent = 'Best-match search is unavailable right now. Word matches are shown instead.';
         searchWorker = null;
       };
     }
@@ -204,6 +221,17 @@
       .slice(0, 7);
   }
 
+  function exactKeywordRetrieve(text) {
+    const terms = tokenize(text);
+    return projects.map((project) => {
+      const haystack = `${project.title} ${project.description} ${project.broad} ${project.category} ${project.context} ${project.tags.join(' ')}`.toLowerCase();
+      const matches = terms.filter((term) => haystack.includes(term)).length;
+      return { ...project, relevance: matches * 10 + project.significance / 100 };
+    }).filter((project) => project.relevance > 1)
+      .sort((left, right) => right.relevance - left.relevance)
+      .slice(0, 7);
+  }
+
   function tokenize(text) {
     return (text.toLowerCase().match(/[a-z0-9+#.-]+/g) || [])
       .filter((token) => token.length > 1 && !stop.has(token));
@@ -213,13 +241,13 @@
     output.hidden = false;
     answer.hidden = true;
     openDialog.disabled = !retrieved.length;
+    chatSearchHint.hidden = retrieved.length > 0;
     generate.disabled = !modelReady || !retrieved.length;
     evidence.innerHTML = retrieved.length
       ? retrieved.map((project, index) => (
-        `<article class="evidence-item"><h4>${index + 1}. ${project.title}`
-        + `<span class="evidence-score">relevance ${project.relevance.toFixed(1)}</span></h4>`
+        `<article class="evidence-item"><h4>${index + 1}. ${project.title}</h4>`
         + `<p>${project.description}</p>`
-        + `${project.url ? `<a href="${project.url}" target="_blank" rel="noreferrer">Source →</a>` : ''}</article>`
+        + `${project.url ? `<a href="${project.url}" target="_blank" rel="noreferrer">Open project →</a>` : ''}</article>`
       )).join('')
       : '<p>No strong match found. Try different terms.</p>';
   }
